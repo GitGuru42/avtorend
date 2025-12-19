@@ -1,0 +1,607 @@
+/* ===== VIDEO HERO STYLES ===== */
+
+/* Video Hero Container */
+.video-hero-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    z-index: 1;
+    isolation: isolate;
+}
+
+/* Video Background */
+.luxury-car-video {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    min-width: 100%;
+    min-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: cover;
+    object-position: center;
+    filter: brightness(0.4) contrast(1.2) saturate(1.1);
+    animation: videoEntrance 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    will-change: transform, filter, opacity;
+    /* Performance optimization */
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    perspective: 1000;
+    -webkit-perspective: 1000;
+}
+
+@keyframes videoEntrance {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(1.1);
+        filter: brightness(0.4) contrast(1.2) saturate(1.1) blur(10px);
+    }
+    100% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+        filter: brightness(0.4) contrast(1.2) saturate(1.1) blur(0);
+    }
+}
+
+/* Video Fallback Image */
+.video-fallback {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+}
+
+.video-fallback.active {
+    opacity: 1;
+}
+
+/* Video Overlay Effects */
+.video-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.gradient-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0.8) 0%,
+        rgba(0, 0, 0, 0.5) 25%,
+        rgba(0, 0, 0, 0.3) 40%,
+        transparent 50%,
+        rgba(0, 0, 0, 0.3) 60%,
+        rgba(0, 0, 0, 0.5) 75%,
+        rgba(0, 0, 0, 0.8) 100%
+    );
+}
+
+/* Light streaks - оптимизировано для производительности */
+.light-streaks {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    opacity: 0.5;
+}
+
+.light-streak {
+    position: absolute;
+    top: 0;
+    left: -100px;
+    width: 100px;
+    height: 1px;
+    background: linear-gradient(90deg, 
+        transparent 0%, 
+        rgba(255, 255, 255, 0.2) 20%,
+        rgba(255, 255, 255, 0.4) 50%,
+        rgba(255, 255, 255, 0.2) 80%,
+        transparent 100%
+    );
+    filter: blur(0.5px);
+    transform-origin: left center;
+    animation: lightStreakMove 20s linear infinite;
+    will-change: transform;
+}
+
+.light-streak:nth-child(1) {
+    top: 20%;
+    animation-delay: 0s;
+    animation-duration: 25s;
+}
+
+.light-streak:nth-child(2) {
+    top: 50%;
+    animation-delay: 7s;
+    animation-duration: 30s;
+}
+
+.light-streak:nth-child(3) {
+    top: 80%;
+    animation-delay: 14s;
+    animation-duration: 35s;
+}
+
+@keyframes lightStreakMove {
+    0% {
+        transform: translateX(0) scaleX(0);
+        opacity: 0;
+    }
+    5% {
+        opacity: 0.3;
+        transform: translateX(0) scaleX(1);
+    }
+    95% {
+        opacity: 0.3;
+    }
+    100% {
+        transform: translateX(calc(100vw + 200px)) scaleX(1);
+        opacity: 0;
+    }
+}
+
+/* Video Controls */
+.video-controls {
+    position: absolute;
+    bottom: var(--spacing-lg);
+    right: var(--spacing-lg);
+    display: flex;
+    gap: var(--spacing-sm);
+    z-index: 30;
+    opacity: 0.7;
+    transition: opacity var(--transition-base) ease;
+}
+
+.video-controls:hover {
+    opacity: 1;
+}
+
+.video-control-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all var(--transition-base) cubic-bezier(0.4, 0, 0.2, 1);
+    min-width: 44px;
+    min-height: 44px;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.video-control-btn:hover,
+.video-control-btn:focus {
+    background: rgba(0, 0, 0, 0.8);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: scale(1.1);
+    outline: none;
+}
+
+.video-control-btn:active {
+    transform: scale(0.95);
+}
+
+.video-control-btn svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* Loading state */
+.luxury-car-video.loading {
+    opacity: 0;
+}
+
+.luxury-car-video.loaded {
+    opacity: 1;
+    transition: opacity 0.5s ease;
+}
+
+/* ===== RESPONSIVE DESIGN ===== */
+
+/* Large Desktop (1440px+) */
+@media (min-width: 1440px) {
+    .video-controls {
+        bottom: 40px;
+        right: 40px;
+    }
+    
+    .video-control-btn {
+        width: 48px;
+        height: 48px;
+    }
+    
+    .video-control-btn svg {
+        width: 22px;
+        height: 22px;
+    }
+}
+
+/* Tablet Landscape (1024px - 1440px) */
+@media (max-width: 1440px) and (min-width: 1024px) {
+    .video-controls {
+        bottom: 30px;
+        right: 30px;
+    }
+    
+    .luxury-car-video {
+        filter: brightness(0.35) contrast(1.25) saturate(1.15);
+    }
+}
+
+/* Tablet Portrait (768px - 1024px) */
+@media (max-width: 1024px) and (min-width: 768px) {
+    .video-controls {
+        bottom: 25px;
+        right: 25px;
+    }
+    
+    .video-control-btn {
+        width: 42px;
+        height: 42px;
+    }
+    
+    .video-control-btn svg {
+        width: 18px;
+        height: 18px;
+    }
+    
+    .luxury-car-video {
+        filter: brightness(0.35) contrast(1.3) saturate(1.2);
+    }
+    
+    /* Упрощаем анимации для планшетов */
+    .light-streak {
+        animation-duration: 15s;
+        opacity: 0.3;
+    }
+}
+
+/* Mobile Landscape (568px - 768px) */
+@media (max-width: 768px) {
+    .video-controls {
+        bottom: 20px;
+        right: 20px;
+        gap: 12px;
+    }
+    
+    .video-control-btn {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .video-control-btn svg {
+        width: 18px;
+        height: 18px;
+    }
+    
+    .luxury-car-video {
+        filter: brightness(0.3) contrast(1.35) saturate(1.25);
+    }
+    
+    /* Отключаем сложные анимации на мобильных */
+    .light-streak {
+        display: none;
+    }
+    
+    @keyframes videoEntrance {
+        0% {
+            opacity: 0;
+            transform: translate(-50%, -50%) scale(1.05);
+            filter: brightness(0.3) contrast(1.35) saturate(1.25) blur(5px);
+        }
+        100% {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+            filter: brightness(0.3) contrast(1.35) saturate(1.25) blur(0);
+        }
+    }
+}
+
+/* Mobile Portrait (375px - 568px) */
+@media (max-width: 568px) {
+    .video-controls {
+        bottom: 16px;
+        right: 16px;
+        gap: 10px;
+    }
+    
+    .video-control-btn {
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
+        min-height: 36px;
+    }
+    
+    .video-control-btn svg {
+        width: 16px;
+        height: 16px;
+    }
+    
+    .luxury-car-video {
+        filter: brightness(0.25) contrast(1.4) saturate(1.3);
+    }
+    
+    .gradient-overlay {
+        background: linear-gradient(
+            to bottom,
+            rgba(0, 0, 0, 0.85) 0%,
+            rgba(0, 0, 0, 0.6) 20%,
+            rgba(0, 0, 0, 0.4) 35%,
+            transparent 50%,
+            rgba(0, 0, 0, 0.4) 65%,
+            rgba(0, 0, 0, 0.6) 80%,
+            rgba(0, 0, 0, 0.85) 100%
+        );
+    }
+}
+
+/* Small Mobile (до 375px) */
+@media (max-width: 375px) {
+    .video-controls {
+        bottom: 12px;
+        right: 12px;
+    }
+    
+    .video-control-btn {
+        width: 34px;
+        height: 34px;
+    }
+    
+    .video-control-btn svg {
+        width: 15px;
+        height: 15px;
+    }
+    
+    .luxury-car-video {
+        filter: brightness(0.2) contrast(1.5) saturate(1.35);
+    }
+}
+
+/* Landscape Mode Optimization */
+@media (max-height: 500px) and (orientation: landscape) {
+    .video-controls {
+        bottom: 15px;
+        right: 15px;
+    }
+    
+    .video-control-btn {
+        width: 36px;
+        height: 36px;
+    }
+    
+    .luxury-car-video {
+        filter: brightness(0.35) contrast(1.4) saturate(1.3);
+    }
+    
+    .gradient-overlay {
+        background: linear-gradient(
+            to bottom,
+            rgba(0, 0, 0, 0.9) 0%,
+            rgba(0, 0, 0, 0.7) 30%,
+            rgba(0, 0, 0, 0.5) 45%,
+            transparent 50%,
+            rgba(0, 0, 0, 0.5) 55%,
+            rgba(0, 0, 0, 0.7) 70%,
+            rgba(0, 0, 0, 0.9) 100%
+        );
+    }
+}
+
+/* High DPI/Retina Displays */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+    .video-control-btn {
+        border-width: 0.5px;
+    }
+}
+
+/* Reduced Motion Preferences */
+@media (prefers-reduced-motion: reduce) {
+    .luxury-car-video,
+    .light-streak {
+        animation: none !important;
+    }
+    
+    .video-control-btn {
+        transition: none !important;
+    }
+    
+    @keyframes videoEntrance {
+        0% {
+            opacity: 0;
+        }
+        100% {
+            opacity: 1;
+        }
+    }
+}
+
+/* Reduced Transparency Preferences */
+@media (prefers-reduced-transparency: reduce) {
+    .video-control-btn {
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        background: rgba(0, 0, 0, 0.8);
+    }
+    
+    .gradient-overlay {
+        background: rgba(0, 0, 0, 0.7);
+    }
+}
+
+/* Dark Mode Adjustments */
+@media (prefers-color-scheme: dark) {
+    .luxury-car-video {
+        filter: brightness(0.35) contrast(1.3) saturate(1.2);
+    }
+    
+    .gradient-overlay {
+        background: linear-gradient(
+            to bottom,
+            rgba(0, 0, 0, 0.85) 0%,
+            rgba(0, 0, 0, 0.65) 30%,
+            rgba(0, 0, 0, 0.45) 45%,
+            transparent 50%,
+            rgba(0, 0, 0, 0.45) 55%,
+            rgba(0, 0, 0, 0.65) 70%,
+            rgba(0, 0, 0, 0.85) 100%
+        );
+    }
+}
+
+/* Touch Device Optimizations */
+@media (hover: none) and (pointer: coarse) {
+    .video-controls {
+        opacity: 0.9;
+    }
+    
+    .video-control-btn:hover {
+        transform: none;
+    }
+    
+    .video-control-btn:active {
+        transform: scale(0.95);
+        background: rgba(0, 0, 0, 0.9);
+    }
+    
+    /* Увеличиваем touch-цели */
+    .video-control-btn {
+        min-width: 44px;
+        min-height: 44px;
+    }
+}
+
+/* Slow Connection / Save Data Mode */
+@media (prefers-reduced-data: reduce) {
+    .luxury-car-video {
+        display: none;
+    }
+    
+    .video-fallback {
+        display: block;
+        opacity: 1;
+    }
+    
+    .light-streak {
+        display: none;
+    }
+}
+
+/* Print Styles */
+@media print {
+    .video-hero-container {
+        display: none !important;
+    }
+}
+
+/* Performance Optimizations */
+@media (prefers-contrast: more) {
+    .luxury-car-video {
+        filter: brightness(0.5) contrast(1.8) saturate(1.1);
+    }
+}
+
+/* Safari-specific fixes */
+@supports (-webkit-touch-callout: none) {
+    .video-hero-container {
+        -webkit-mask-image: -webkit-radial-gradient(white, black);
+    }
+    
+    .luxury-car-video {
+        /* Fix for Safari video rendering */
+        transform: translate3d(-50%, -50%, 0);
+    }
+}
+
+/* Firefox-specific optimizations */
+@-moz-document url-prefix() {
+    .luxury-car-video {
+        /* Firefox video optimization */
+        image-rendering: -moz-crisp-edges;
+    }
+}
+
+/* Edge-specific fixes */
+@supports (-ms-ime-align: auto) {
+    .video-hero-container {
+        /* Edge compatibility */
+        overflow: visible;
+    }
+}
+
+/* Mobile data saver detection */
+.video-hero-container.data-saver .luxury-car-video {
+    display: none;
+}
+
+.video-hero-container.data-saver .video-fallback {
+    display: block;
+    opacity: 1;
+}
+
+/* Battery saver mode */
+@media (prefers-reduced-data: reduce) or (update: slow) {
+    .luxury-car-video {
+        display: none;
+    }
+    
+    .video-fallback {
+        display: block;
+        opacity: 1;
+    }
+    
+    .light-streak {
+        display: none;
+    }
+}
+
+/* Network status detection */
+.video-hero-container.slow-connection .luxury-car-video {
+    display: none;
+}
+
+.video-hero-container.slow-connection .video-fallback {
+    display: block;
+    opacity: 1;
+}
+
+/* Video error state */
+.video-hero-container.video-error .luxury-car-video {
+    display: none;
+}
+
+.video-hero-container.video-error .video-fallback {
+    display: block;
+    opacity: 1;
+}

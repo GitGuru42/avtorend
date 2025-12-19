@@ -1,0 +1,815 @@
+/* AOS (Animate On Scroll) styles */
+[data-aos] {
+    opacity: 0;
+    transition-property: transform, opacity;
+    transition-duration: 0.8s;
+    transition-timing-function: cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+
+[data-aos="fade-up"] {
+    transform: translate3d(0, 40px, 0);
+}
+
+[data-aos="fade-down"] {
+    transform: translate3d(0, -40px, 0);
+}
+
+[data-aos="fade-left"] {
+    transform: translate3d(-40px, 0, 0);
+}
+
+[data-aos="fade-right"] {
+    transform: translate3d(40px, 0, 0);
+}
+
+[data-aos="zoom-in"] {
+    transform: scale3d(0.8, 0.8, 0.8);
+}
+
+[data-aos="zoom-out"] {
+    transform: scale3d(1.2, 1.2, 1.2);
+}
+
+[data-aos="flip-up"] {
+    transform: perspective(1000px) rotateX(-90deg);
+    transform-origin: top;
+}
+
+[data-aos="flip-down"] {
+    transform: perspective(1000px) rotateX(90deg);
+    transform-origin: bottom;
+}
+
+[data-aos].aos-animate {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale3d(1, 1, 1) rotateX(0);
+}
+
+/* Staggered animations */
+[data-aos-delay="100"] {
+    transition-delay: 100ms;
+}
+
+[data-aos-delay="200"] {
+    transition-delay: 200ms;
+}
+
+[data-aos-delay="300"] {
+    transition-delay: 300ms;
+}
+
+[data-aos-delay="400"] {
+    transition-delay: 400ms;
+}
+
+[data-aos-delay="500"] {
+    transition-delay: 500ms;
+}
+
+/* Micro-interactions for dark theme */
+.cta-button, .filter-btn, .car-card, .nav-links a, .lang-switcher {
+    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Enhanced hover effects */
+.cta-button:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 25px rgba(10, 132, 255, 0.3);
+}
+
+.filter-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.car-card:hover {
+    transform: translateY(-10px) scale(1.02);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+/* Loading animation for dark theme */
+.loading {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    border: 3px solid rgba(10, 132, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: var(--primary-color);
+    animation: spin 1s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite;
+}
+
+.loading.large {
+    width: 40px;
+    height: 40px;
+    border-width: 4px;
+}
+
+@keyframes spin {
+    0% { 
+        transform: rotate(0deg);
+        border-top-color: var(--primary-color);
+    }
+    50% {
+        border-top-color: #5ac8fa;
+    }
+    100% { 
+        transform: rotate(360deg);
+        border-top-color: var(--primary-color);
+    }
+}
+
+/* Pulse animation for chat - enhanced */
+@keyframes pulse {
+    0% { 
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(10, 132, 255, 0.7);
+    }
+    70% { 
+        transform: scale(1.1);
+        box-shadow: 0 0 0 15px rgba(10, 132, 255, 0);
+    }
+    100% { 
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(10, 132, 255, 0);
+    }
+}
+
+.chat-toggle.pulse {
+    animation: pulse 2s infinite;
+}
+
+/* Shimmer effect for premium look */
+.shimmer {
+    position: relative;
+    overflow: hidden;
+}
+
+.shimmer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(90deg, 
+        transparent, 
+        rgba(255, 255, 255, 0.1), 
+        transparent);
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    100% {
+        left: 150%;
+    }
+}
+
+/* Float animation */
+@keyframes float {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+.float {
+    animation: float 3s ease-in-out infinite;
+}
+
+/* Bounce animation */
+@keyframes bounce {
+    0%, 20%, 50%, 80%, 100% {
+        transform: translateY(0);
+    }
+    40% {
+        transform: translateY(-15px);
+    }
+    60% {
+        transform: translateY(-7px);
+    }
+}
+
+.bounce {
+    animation: bounce 2s infinite;
+}
+
+/* Gradient text animation */
+@keyframes gradientShift {
+    0% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+.gradient-animate {
+    background-size: 200% 200%;
+    animation: gradientShift 3s ease infinite;
+}
+
+/* Typewriter effect */
+.typewriter {
+    overflow: hidden;
+    border-right: 3px solid var(--primary-color);
+    white-space: nowrap;
+    animation: typing 3.5s steps(40, end), blink-caret 0.75s step-end infinite;
+}
+
+@keyframes typing {
+    from { width: 0 }
+    to { width: 100% }
+}
+
+@keyframes blink-caret {
+    from, to { border-color: transparent }
+    50% { border-color: var(--primary-color) }
+}
+
+/* Glitch effect */
+@keyframes glitch {
+    0% {
+        transform: translate(0);
+    }
+    20% {
+        transform: translate(-2px, 2px);
+    }
+    40% {
+        transform: translate(-2px, -2px);
+    }
+    60% {
+        transform: translate(2px, 2px);
+    }
+    80% {
+        transform: translate(2px, -2px);
+    }
+    100% {
+        transform: translate(0);
+    }
+}
+
+.glitch {
+    animation: glitch 0.5s infinite;
+}
+
+/* Scroll progress indicator */
+.scroll-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 0%;
+    height: 3px;
+    background: linear-gradient(90deg, 
+        var(--primary-color), 
+        #5ac8fa, 
+        var(--primary-color));
+    z-index: 1001;
+    transition: width 0.3s ease;
+}
+
+/* Page transition */
+.page-transition {
+    animation: pageFadeIn 0.6s ease-out;
+}
+
+@keyframes pageFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Ripple effect */
+.ripple {
+    position: relative;
+    overflow: hidden;
+}
+
+.ripple::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 5px;
+    height: 5px;
+    background: rgba(255, 255, 255, 0.5);
+    opacity: 0;
+    border-radius: 100%;
+    transform: scale(1, 1) translate(-50%);
+    transform-origin: 50% 50%;
+}
+
+.ripple:focus:not(:active)::after {
+    animation: ripple 1s ease-out;
+}
+
+@keyframes ripple {
+    0% {
+        transform: scale(0, 0);
+        opacity: 0.5;
+    }
+    20% {
+        transform: scale(25, 25);
+        opacity: 0.3;
+    }
+    100% {
+        opacity: 0;
+        transform: scale(40, 40);
+    }
+}
+
+/* Staggered reveal for grid items */
+.stagger-item {
+    opacity: 0;
+    animation: fadeInUp 0.6s forwards;
+}
+
+.stagger-item:nth-child(1) { animation-delay: 0.1s; }
+.stagger-item:nth-child(2) { animation-delay: 0.2s; }
+.stagger-item:nth-child(3) { animation-delay: 0.3s; }
+.stagger-item:nth-child(4) { animation-delay: 0.4s; }
+.stagger-item:nth-child(5) { animation-delay: 0.5s; }
+.stagger-item:nth-child(6) { animation-delay: 0.6s; }
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+/* ===== ENHANCED CAR CARD ANIMATIONS ===== */
+
+/* Skeleton Loading Animation */
+.skeleton {
+    position: relative;
+    overflow: hidden;
+    background: var(--background-tertiary);
+}
+
+.skeleton::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.05),
+        transparent
+    );
+    animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+.skeleton.pulse .skeleton-line,
+.skeleton.pulse .skeleton-circle,
+.skeleton.pulse .skeleton-image {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* Car Card Appear Animation */
+.car-card.loaded {
+    animation: cardAppear 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes cardAppear {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Car Card Hover Effects */
+.car-card {
+    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.car-card:hover {
+    transform: translateY(-10px) scale(1.02);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.car-card:hover .car-image {
+    transform: scale(1.05);
+}
+
+.car-image {
+    transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Glow Effect */
+.car-glow {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: var(--radius-xl);
+    pointer-events: none;
+    opacity: 0;
+    background: radial-gradient(
+        circle at 50% 0%,
+        rgba(10, 132, 255, 0.2),
+        transparent 50%
+    );
+    transition: opacity 0.3s ease;
+    z-index: -1;
+}
+
+.car-card:hover .car-glow {
+    opacity: 1;
+}
+
+/* Button Icon Animation */
+.car-details-btn .btn-icon,
+.car-book-btn .btn-icon {
+    transition: transform 0.3s ease;
+}
+
+.car-details-btn:hover .btn-icon {
+    transform: translateX(3px);
+}
+
+.car-book-btn:hover .btn-icon {
+    transform: translateY(-2px);
+}
+
+/* Feature Tags Animation */
+.car-feature-tag {
+    transition: all 0.2s ease;
+}
+
+.car-feature-tag:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Rating Stars Animation */
+.star {
+    display: inline-block;
+    transition: transform 0.3s ease;
+}
+
+.car-card:hover .star {
+    animation: starTwinkle 0.6s ease;
+}
+
+@keyframes starTwinkle {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.2);
+    }
+}
+
+/* Quick View Button Animation */
+.car-quick-view {
+    transform: translateY(20px);
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.car-card:hover .car-quick-view {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+/* Badge Animation */
+.car-category-badge,
+.car-status-badge {
+    transition: all 0.3s ease;
+}
+
+.car-card:hover .car-category-badge {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Price Animation */
+.price-amount {
+    display: inline-block;
+    transition: all 0.3s ease;
+}
+
+.car-card:hover .price-amount {
+    animation: pricePulse 2s infinite;
+}
+
+@keyframes pricePulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+/* Spec Icons Animation */
+.spec-icon {
+    display: inline-block;
+    transition: all 0.3s ease;
+}
+
+.car-spec:hover .spec-icon {
+    transform: scale(1.2) rotate(5deg);
+}
+
+/* More Features Button Animation */
+.more-features {
+    position: relative;
+    overflow: hidden;
+}
+
+.more-features::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(90deg, 
+        transparent, 
+        rgba(10, 132, 255, 0.2), 
+        transparent);
+    animation: shimmer 2s infinite;
+}
+
+.more-features:hover::after {
+    animation: shimmer 0.8s infinite;
+}
+
+/* Filter Buttons Animation */
+.filter-btn {
+    position: relative;
+    overflow: hidden;
+}
+
+.filter-btn::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s ease, height 0.6s ease;
+}
+
+.filter-btn:hover::after {
+    width: 200px;
+    height: 200px;
+}
+
+.filter-btn.active::after {
+    background: rgba(10, 132, 255, 0.2);
+}
+
+/* Car Grid Stagger Animation */
+.cars-grid .car-card {
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUpStagger 0.6s forwards;
+}
+
+.cars-grid .car-card:nth-child(1) { animation-delay: 0.1s; }
+.cars-grid .car-card:nth-child(2) { animation-delay: 0.2s; }
+.cars-grid .car-card:nth-child(3) { animation-delay: 0.3s; }
+.cars-grid .car-card:nth-child(4) { animation-delay: 0.4s; }
+.cars-grid .car-card:nth-child(5) { animation-delay: 0.5s; }
+.cars-grid .car-card:nth-child(6) { animation-delay: 0.6s; }
+.cars-grid .car-card:nth-child(7) { animation-delay: 0.7s; }
+.cars-grid .car-card:nth-child(8) { animation-delay: 0.8s; }
+
+@keyframes fadeInUpStagger {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Image Loading Animation */
+.car-image.loading {
+    opacity: 0;
+    filter: blur(10px);
+}
+
+.car-image.loaded {
+    opacity: 1;
+    filter: blur(0);
+    transition: opacity 0.5s ease, filter 0.5s ease;
+}
+
+/* Notification Animation */
+.notification {
+    animation: slideInRight 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Modal Animation */
+.car-modal-overlay,
+.booking-modal-overlay {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.car-modal,
+.booking-modal {
+    animation: slideUpModal 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes slideUpModal {
+    from {
+        opacity: 0;
+        transform: translateY(30px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Scroll Indicator Animation */
+.scroll-indicator {
+    animation: bounce 2s infinite;
+}
+
+/* Category Colors Animation */
+.car-category-badge.economy:hover {
+    animation: colorShiftEconomy 2s infinite;
+}
+
+@keyframes colorShiftEconomy {
+    0%, 100% { 
+        background: linear-gradient(135deg, rgba(46, 204, 113, 0.2), rgba(39, 174, 96, 0.4));
+        color: #2ecc71;
+    }
+    50% { 
+        background: linear-gradient(135deg, rgba(39, 174, 96, 0.4), rgba(46, 204, 113, 0.2));
+        color: #27ae60;
+    }
+}
+
+.car-category-badge.premium:hover {
+    animation: colorShiftPremium 2s infinite;
+}
+
+@keyframes colorShiftPremium {
+    0%, 100% { 
+        background: linear-gradient(135deg, rgba(241, 196, 15, 0.2), rgba(243, 156, 18, 0.4));
+        color: #f1c40f;
+    }
+    50% { 
+        background: linear-gradient(135deg, rgba(243, 156, 18, 0.4), rgba(241, 196, 15, 0.2));
+        color: #f39c12;
+    }
+}
+
+/* Status Badge Animation */
+.car-status-badge.available {
+    animation: pulseAvailable 2s infinite;
+}
+
+@keyframes pulseAvailable {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 0 8px rgba(46, 204, 113, 0);
+    }
+}
+
+.car-status-badge.rented {
+    animation: pulseRented 2s infinite;
+}
+
+@keyframes pulseRented {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 0 8px rgba(231, 76, 60, 0);
+    }
+}
+
+/* Loading Spinner for Cars */
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    border-top-color: var(--primary-color);
+    animation: spin 1s linear infinite;
+    margin: 0 auto;
+}
+
+/* Retry Button Animation */
+.retry-btn {
+    position: relative;
+    overflow: hidden;
+}
+
+.retry-btn::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s ease, height 0.6s ease;
+}
+
+.retry-btn:hover::after {
+    width: 200px;
+    height: 200px;
+}
+
+/* No Cars Animation */
+.no-cars-icon {
+    animation: float 3s ease-in-out infinite;
+}
+
+/* Hero Button to Fleet Animation */
+.hero-actions .secondary:hover {
+    animation: arrowMove 0.6s ease;
+}
+
+@keyframes arrowMove {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-3px);
+    }
+}
+
+/* Responsive Animation Adjustments */
+@media (max-width: 768px) {
+    .car-card:hover {
+        transform: translateY(-5px) scale(1.01);
+    }
+    
+    .cars-grid .car-card {
+        animation-delay: 0s !important;
+        animation-duration: 0.4s;
+    }
+}

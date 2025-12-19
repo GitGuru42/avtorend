@@ -1,0 +1,51 @@
+# render.yaml - Production Configuration for AvtoRend
+services:
+  - type: web
+    name: avtorend-api
+    env: python
+    region: frankfurt  # Или oregon, singapore, ближе к пользователям
+    plan: free  # free, starter, или professional
+    branch: main
+    
+    # ✅ Важно: Если main.py в корне, а не в папке api
+    rootDirectory: .
+    
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+      # Создаем необходимые директории
+      mkdir -p static/uploads/cars
+      mkdir -p static/uploads/temp
+    
+    # ✅ ИСПРАВЛЕННАЯ КОМАНДА (main.py в корне)
+    startCommand: gunicorn main:app --workers 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
+    
+    # ✅ Обязательные переменные окружения
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false  # Будет настроена позже в панели Render
+      - key: ALLOWED_ORIGINS
+        value: "*"  # На время разработки, потом заменить
+    
+    # ✅ Диск для загрузок файлов (если нужно сохранять файлы между деплоями)
+    disk:
+      name: uploads
+      mountPath: /opt/render/project/src/static/uploads
+      sizeGB: 1
+    
+    # ✅ Настройки деплоя
+    autoDeploy: true
+    pullRequestPreviewsEnabled: true
+    
+    # ✅ Health check
+    healthCheckPath: /health
+    healthCheckTimeout: 10
+    initialDelaySec: 45

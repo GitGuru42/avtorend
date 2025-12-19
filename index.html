@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="LuxuryDrive - премиальный каршеринг с водителем. Аренда роскошных автомобилей премиум-класса.">
+    <meta name="keywords" content="каршеринг, аренда автомобилей, премиум автомобили, водитель, такси премиум">
+    <meta name="author" content="LuxuryDrive">
+    <title>LuxuryDrive | Премиальный каршеринг с водителем</title>
+    
+    <!-- ✅ ОПТИМИЗАЦИЯ: Локальные стили вместо CDN -->
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/animation.css">
+    <link rel="stylesheet" href="styles/components/video-hero.css">
+    <link rel="stylesheet" href="styles/components/header.css">
+    <link rel="stylesheet" href="styles/components/about.css">
+    <link rel="stylesheet" href="styles/components/fleet.css">
+    <link rel="stylesheet" href="styles/components/chat.css">
+    <link rel="stylesheet" href="styles/components/contact.css">
+    <link rel="preconnect" href="https://images.unsplash.com">
+    
+    <!-- ✅ ИКОНКИ: Фавикон и манифест -->
+    <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+    <link rel="manifest" href="/static/manifest.json">
+    
+    <!-- ✅ Open Graph для соцсетей -->
+    <meta property="og:title" content="LuxuryDrive | Премиальный каршеринг">
+    <meta property="og:description" content="Эксклюзивные автомобили с водителем. Комфорт, безопасность и стиль в каждой поездке">
+    <meta property="og:image" content="/static/og-image.jpg">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://luxurydrive.ru">
+    
+    <!-- ✅ Тема браузера -->
+    <meta name="theme-color" content="#000000">
+    
+    <!-- ✅ Preload критичных ресурсов -->
+    <link rel="preload" href="js/api.js" as="script">
+    <link rel="preload" href="js/fleet-manager.js" as="script">
+    
+    <!-- ✅ Предзагрузка шрифтов (если есть) -->
+    <!-- <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" as="style"> -->
+</head>
+<body class="dark-theme">
+    <!-- Header -->
+    <header class="header" data-aos="fade-down">
+        <nav class="nav">
+            <div class="logo">
+                <span class="logo-icon">🚘</span>
+                <span class="logo-text" data-i18n="nav.home">LuxuryDrive</span>
+            </div>
+            
+            <!-- Desktop Navigation -->
+            <div class="nav-links desktop-nav">
+                <a href="#home" class="nav-link" data-i18n="nav.home">Главная</a>
+                <a href="#fleet" class="nav-link" data-i18n="nav.fleet">Автопарк</a>
+                <a href="#about" class="nav-link" data-i18n="nav.about">О нас</a>
+                <a href="#contact" class="nav-link" data-i18n="nav.contact">Контакты</a>
+            </div>
+            
+            <!-- Language Switcher (Desktop) -->
+            <div class="language-switcher">
+                <button class="lang-btn" data-lang="ru" aria-label="Русский">RU</button>
+                <span class="lang-separator">|</span>
+                <button class="lang-btn" data-lang="en" aria-label="English">EN</button>
+            </div>
+            
+            <!-- Mobile Menu Button -->
+            <button class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Открыть меню">
+                <span class="burger-line"></span>
+                <span class="burger-line"></span>
+                <span class="burger-line"></span>
+            </button>
+            
+            <!-- Mobile Navigation -->
+            <div class="mobile-nav" id="mobileNav">
+                <div class="mobile-nav-header">
+                    <div class="logo">LuxuryDrive</div>
+                    <button class="mobile-close-btn" id="mobileCloseBtn" aria-label="Закрыть меню">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 6L6 18M6 6L18 18" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="mobile-nav-links">
+                    <a href="#home" class="mobile-nav-link">
+                        <span data-i18n="nav.home">Главная</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </a>
+                    <a href="#fleet" class="mobile-nav-link">
+                        <span data-i18n="nav.fleet">Автопарк</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </a>
+                    <a href="#about" class="mobile-nav-link">
+                        <span data-i18n="nav.about">О нас</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </a>
+                    <a href="#contact" class="mobile-nav-link">
+                        <span data-i18n="nav.contact">Контакты</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </a>
+                    <div class="mobile-language-switcher">
+                        <button class="lang-btn" data-lang="ru">RU</button>
+                        <span class="lang-separator">|</span>
+                        <button class="lang-btn" data-lang="en">EN</button>
+                    </div>
+                </div>
+                <div class="mobile-nav-footer">
+                    <p>Premium Car Rental Service</p>
+                    <p class="mobile-copyright">© 2024 LuxuryDrive</p>
+                </div>
+            </div>
+            
+            <!-- CTA Button (скрыт на мобильных) -->
+            <button class="cta-button primary desktop-book-btn" onclick="scrollToFleet()">
+                <span class="btn-text" data-i18n="hero.cta.explore">Выбрать авто</span>
+                <span class="btn-icon">→</span>
+            </button>
+        </nav>
+    </header>
+
+    <!-- Hero Section -->
+    <section id="home" class="hero">
+        <!-- Video Background -->
+        <div class="video-hero-container">
+            <video class="luxury-car-video" autoplay muted loop playsinline preload="auto" 
+                   poster="https://images.unsplash.com/photo-1553440569-bcc63803a83d?w=1920&h=1080&fit=crop">
+                <source src="/static/videos/mixkit-close-up-of-red-sports-car-63-hd-ready.mp4" type="video/mp4">
+                <source src="/static/videos/luxury-car.webm" type="video/webm">
+                <img src="https://images.unsplash.com/photo-1553440569-bcc63803a83d?w=1920&h=1080&fit=crop" 
+                     alt="Luxury Car" class="video-fallback" loading="lazy">
+            </video>
+            
+            <!-- Video Overlay -->
+            <div class="video-overlay">
+                <div class="gradient-overlay"></div>
+            </div>
+            
+            <!-- Video Controls -->
+            <div class="video-controls">
+                <button class="video-control-btn mute-btn" title="Включить/выключить звук">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                        <path d="M11 5L6 9H2V15H6L11 19V5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+                <button class="video-control-btn pause-btn" title="Пауза/воспроизведение">
+                    <svg class="play-icon" width="20" height="20" viewBox="0 0 24 24" fill="none">
+                        <path d="M8 5V19L19 12L8 5Z" fill="currentColor"/>
+                    </svg>
+                    <svg class="pause-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" style="display: none;">
+                        <rect x="6" y="4" width="4" height="16" fill="currentColor"/>
+                        <rect x="14" y="4" width="4" height="16" fill="currentColor"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Hero Content -->
+        <div class="hero-content" data-aos="fade-up">
+            <div class="hero-badge" data-aos="fade-up" data-aos-delay="200">
+                <span data-i18n="hero.badge">Premium Class</span>
+            </div>
+            
+            <h1 class="hero-title">
+                <span class="gradient-text" data-i18n="hero.title.part1">Премиальный</span>
+                <span data-i18n="hero.title.part2">каршеринг</span>
+            </h1>
+            
+            <p class="hero-subtitle" data-i18n="hero.subtitle">
+                Эксклюзивные автомобили с водителем. Комфорт, безопасность и стиль в каждой поездке
+            </p>
+            
+            <div class="hero-actions" data-aos="fade-up" data-aos-delay="400">
+                <button class="cta-button primary" onclick="scrollToFleet()">
+                    <span class="btn-text" data-i18n="hero.cta.explore">Выбрать авто</span>
+                    <span class="btn-icon">→</span>
+                </button>
+                <button class="cta-button secondary" onclick="openContactForm()">
+                    <span class="btn-text" data-i18n="nav.contact">Консультация</span>
+                    <span class="btn-icon">💬</span>
+                </button>
+            </div>
+            
+            <!-- Stats -->
+            <div class="hero-stats" data-aos="fade-up" data-aos-delay="600">
+                <div class="stat">
+                    <div class="stat-number">4.9</div>
+                    <div class="stat-label" data-i18n="hero.stats.rating">Рейтинг</div>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat">
+                    <div class="stat-number">24/7</div>
+                    <div class="stat-label" data-i18n="hero.stats.support">Поддержка</div>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat">
+                    <div class="stat-number">50+</div>
+                    <div class="stat-label" data-i18n="hero.stats.cars">Автомобилей</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Scroll Indicator -->
+        <div class="scroll-indicator" data-aos="fade-up" data-aos-delay="800" onclick="scrollToFleet()">
+            <div class="mouse">
+                <div class="wheel"></div>
+            </div>
+            <span data-i18n="hero.scroll">Исследовать автопарк</span>
+        </div>
+    </section>
+
+    <!-- Fleet Section -->
+    <section id="fleet" class="fleet">
+        <div class="container">
+            <div class="section-header" data-aos="fade-up">
+                <h2 class="section-title" data-i18n="fleet.title">Наш автопарк</h2>
+                <p class="section-subtitle" data-i18n="fleet.subtitle">Выберите автомобиль для вашего следующего путешествия</p>
+            </div>
+
+            <!-- Filters -->
+            <div class="fleet-filters" data-aos="fade-up" data-aos-delay="100">
+                <button class="filter-btn active" data-category="all" data-i18n="fleet.filters.all">Все</button>
+                <button class="filter-btn" data-category="business" data-i18n="fleet.filters.business">Бизнес-класс</button>
+                <button class="filter-btn" data-category="premium" data-i18n="fleet.filters.premium">Премиум</button>
+                <button class="filter-btn" data-category="suv" data-i18n="fleet.filters.suv">Внедорожники</button>
+                <button class="filter-btn" data-category="sport" data-i18n="fleet.filters.sport">Спорткары</button>
+            </div>
+
+            <!-- Cars Grid -->
+            <div class="cars-grid" id="carsGrid">
+                <!-- Автомобили загружаются через JavaScript -->
+                <div class="loading-cars">
+                    <div class="spinner"></div>
+                    <p data-i18n="fleet.loading">Загружаем автомобили...</p>
+                </div>
+            </div>
+            
+            <!-- ✅ ДОБАВЛЕНО: Сообщение об ошибке API -->
+            <div class="api-error-message" id="apiErrorMessage" style="display: none;">
+                <p>⚠️ Не удалось загрузить автомобили. Пожалуйста, проверьте подключение к интернету и обновите страницу.</p>
+                <button onclick="location.reload()">Обновить страницу</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- About Section -->
+    <section id="about" class="about">
+        <div class="container">
+            <div class="about-content">
+                <div class="about-text" data-aos="fade-right">
+                    <h2 class="section-title" data-i18n="about.title">Почему LuxuryDrive?</h2>
+                    
+                    <p class="about-description" data-i18n="about.description">
+                        Мы предоставляем эксклюзивные автомобили премиум-класса с профессиональными водителями. 
+                        Наш сервис — это идеальное сочетание роскоши, комфорта и надежности.
+                    </p>
+                    
+                    <!-- Stats -->
+                    <div class="stats-grid">
+                        <div class="stat-item" data-aos="fade-up" data-aos-delay="100">
+                            <div class="stat-number">5+</div>
+                            <div class="stat-label" data-i18n="about.stats.experience">лет опыта</div>
+                        </div>
+                        <div class="stat-item" data-aos="fade-up" data-aos-delay="200">
+                            <div class="stat-number">1000+</div>
+                            <div class="stat-label" data-i18n="about.stats.clients">довольных клиентов</div>
+                        </div>
+                        <div class="stat-item" data-aos="fade-up" data-aos-delay="300">
+                            <div class="stat-number">50+</div>
+                            <div class="stat-label" data-i18n="about.stats.cars">автомобилей</div>
+                        </div>
+                        <div class="stat-item" data-aos="fade-up" data-aos-delay="400">
+                            <div class="stat-number">4.9</div>
+                            <div class="stat-label" data-i18n="about.stats.rating">средний рейтинг</div>
+                        </div>
+                    </div>
+
+                    <!-- Features -->
+                    <div class="features-list">
+                        <div class="feature-item" data-aos="fade-up" data-aos-delay="100">
+                            <div class="feature-icon">🚗</div>
+                            <div class="feature-content">
+                                <h4 data-i18n="about.features.fleet.title">Современный автопарк</h4>
+                                <p data-i18n="about.features.fleet.description">Только новые автомобили премиум-класса с полным пакетом опций</p>
+                            </div>
+                        </div>
+                        <div class="feature-item" data-aos="fade-up" data-aos-delay="200">
+                            <div class="feature-icon">👨‍✈️</div>
+                            <div class="feature-content">
+                                <h4 data-i18n="about.features.drivers.title">Профессиональные водители</h4>
+                                <p data-i18n="about.features.drivers.description">Опытные водители с безупречной репутацией и знанием города</p>
+                            </div>
+                        </div>
+                        <div class="feature-item" data-aos="fade-up" data-aos-delay="300">
+                            <div class="feature-icon">⏱️</div>
+                            <div class="feature-content">
+                                <h4 data-i18n="about.features.availability.title">Круглосуточная работа</h4>
+                                <p data-i18n="about.features.availability.description">Доступ к услугам в любое время суток, 7 дней в неделю</p>
+                            </div>
+                        </div>
+                        <div class="feature-item" data-aos="fade-up" data-aos-delay="400">
+                            <div class="feature-icon">🛡️</div>
+                            <div class="feature-content">
+                                <h4 data-i18n="about.features.insurance.title">Полная страховка</h4>
+                                <p data-i18n="about.features.insurance.description">Комплексная страховка для вашего спокойствия и безопасности</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="about-visual" data-aos="fade-left">
+                    <div class="image-grid">
+                        <div class="image-item large">
+                            <img src="https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=600&h=400&fit=crop" 
+                                 alt="Premium car interior" loading="lazy" width="600" height="400">
+                            <div class="image-overlay">
+                                <span>Роскошные салоны</span>
+                            </div>
+                        </div>
+                        <div class="image-item small">
+                            <img src="https://images.unsplash.com/photo-1580273916550-e323be2ae537?w=300&h=200&fit=crop" 
+                                 alt="Professional driver" loading="lazy" width="300" height="200">
+                            <div class="image-overlay">
+                                <span>Профессиональные водители</span>
+                            </div>
+                        </div>
+                        <div class="image-item small">
+                            <img src="https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?w=300&h=200&fit=crop" 
+                                 alt="Luxury car fleet" loading="lazy" width="300" height="200">
+                            <div class="image-overlay">
+                                <span>Эксклюзивный флот</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Section -->
+    <section id="contact" class="contact">
+        <div class="container">
+            <div class="section-header" data-aos="fade-up">
+                <h2 class="section-title" data-i18n="contact.title">Контакты для бронирования</h2>
+                <p class="section-subtitle" data-i18n="contact.subtitle">Звоните для бронирования или вопросов 24/7</p>
+            </div>
+
+            <!-- Обновленный блок contact-info -->
+            <div class="contact-content" data-aos="fade-up" data-aos-delay="100">
+                <div class="contact-info">
+                    <div class="contact-item highlight">
+                        <div class="contact-icon">📞</div>
+                        <div class="contact-details">
+                            <h4 data-i18n="contact.info.phone">Телефон для бронирования</h4>
+                            <a href="tel:+79991234567" class="contact-link phone-number">
+                                +7 (999) 123-45-67
+                            </a>
+                            <p class="contact-note">Звоните для бронирования 24/7</p>
+                        </div>
+                    </div>
+                    
+                    <div class="contact-grid">
+                        <div class="contact-item">
+                            <div class="contact-icon">✉️</div>
+                            <div class="contact-details">
+                                <h4 data-i18n="contact.info.email">Email</h4>
+                                <a href="mailto:info@luxurydrive.ru" class="contact-link">
+                                    info@luxurydrive.ru
+                                </a>
+                            </div>
+                        </div>
+                        
+                        <div class="contact-item">
+                            <div class="contact-icon">🕒</div>
+                            <div class="contact-details">
+                                <h4 data-i18n="contact.info.hours">Часы работы</h4>
+                                <p>Круглосуточно, 7 дней в неделю</p>
+                            </div>
+                        </div>
+                        
+                        <div class="contact-item">
+                            <div class="contact-icon">📍</div>
+                            <div class="contact-details">
+                                <h4 data-i18n="contact.info.address">Адрес офиса</h4>
+                                <p>Москва, ул. Премиальная, 1</p>
+                                <p class="contact-note">(забрать авто можно по договоренности)</p>
+                            </div>
+                        </div>
+                        
+                        <div class="contact-item">
+                            <div class="contact-icon">💬</div>
+                            <div class="contact-details">
+                                <h4>Мессенджеры</h4>
+                                <div class="messenger-links">
+                                    <a href="https://wa.me/79991234567" class="messenger-link whatsapp" target="_blank" rel="noopener">
+                                        WhatsApp
+                                    </a>
+                                    <a href="https://t.me/luxurydrive" class="messenger-link telegram" target="_blank" rel="noopener">
+                                        Telegram
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <div class="logo">
+                        <span class="logo-icon">🚘</span>
+                        <span class="logo-text">LuxuryDrive</span>
+                    </div>
+                    <p class="footer-description" data-i18n="footer.description">
+                        Премиальный каршеринг с водителем. Комфорт и стиль в каждой поездке.
+                    </p>
+                    <div class="social-links">
+                        <a href="#" class="social-link" aria-label="Instagram" rel="noopener">📷</a>
+                        <a href="#" class="social-link" aria-label="Telegram" rel="noopener">✈️</a>
+                        <a href="#" class="social-link" aria-label="WhatsApp" rel="noopener">💬</a>
+                        <a href="#" class="social-link" aria-label="VK" rel="noopener">👥</a>
+                    </div>
+                </div>
+                
+                <div class="footer-links">
+                    <div class="footer-column">
+                        <h4 data-i18n="footer.sections.fleet">Автопарк</h4>
+                        <a href="#fleet" class="footer-link" data-i18n="fleet.filters.business">Бизнес-класс</a>
+                        <a href="#fleet" class="footer-link" data-i18n="fleet.filters.premium">Премиум</a>
+                        <a href="#fleet" class="footer-link" data-i18n="fleet.filters.suv">Внедорожники</a>
+                        <a href="#fleet" class="footer-link" data-i18n="fleet.filters.sport">Спорткары</a>
+                    </div>
+                    
+                    <div class="footer-column">
+                        <h4 data-i18n="footer.sections.services">Услуги</h4>
+                        <a href="#" class="footer-link" data-i18n="footer.services.transfer">Трансфер</a>
+                        <a href="#" class="footer-link" data-i18n="footer.services.business">Деловые поездки</a>
+                        <a href="#" class="footer-link" data-i18n="footer.services.wedding">Свадебный кортеж</a>
+                        <a href="#" class="footer-link" data-i18n="footer.services.excursions">Экскурсии</a>
+                    </div>
+                    
+                    <div class="footer-column">
+                        <h4 data-i18n="footer.sections.company">Компания</h4>
+                        <a href="#about" class="footer-link" data-i18n="footer.company.about">О нас</a>
+                        <a href="#contact" class="footer-link" data-i18n="footer.company.contact">Контакты</a>
+                        <a href="#" class="footer-link" data-i18n="footer.company.reviews">Отзывы</a>
+                        <a href="#" class="footer-link" data-i18n="footer.company.careers">Вакансии</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="footer-bottom">
+                <p class="copyright" data-i18n="footer.copyright">© 2024 LuxuryDrive. Все права защищены.</p>
+                <div class="legal-links">
+                    <a href="/privacy" class="legal-link" data-i18n="footer.legal.privacy">Политика конфиденциальности</a>
+                    <a href="/terms" class="legal-link" data-i18n="footer.legal.terms">Пользовательское соглашение</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Chat Widget -->
+    <div class="chat-widget" id="chatWidget">
+        <div class="chat-header">
+            <span data-i18n="chat.title">Поддержка</span>
+            <button class="chat-close" id="chatClose">×</button>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+            <div class="chat-message bot">
+                <span data-i18n="chat.welcome">Здравствуйте! Чем могу помочь с выбором автомобиля?</span>
+            </div>
+        </div>
+        <div class="chat-input">
+            <input type="text" id="chatInput" placeholder="Напишите сообщение..." data-i18n-placeholder="chat.placeholder">
+            <button id="chatSend">➤</button>
+        </div>
+    </div>
+
+    <button class="chat-toggle" id="chatToggle" aria-label="Открыть чат">
+        💬
+    </button>
+
+    <!-- Back to Top -->
+    <button class="back-to-top" id="backToTop" aria-label="Наверх">
+        ↑
+    </button>
+
+    <!-- ✅ ОПТИМИЗАЦИЯ: Загрузка скриптов в правильном порядке -->
+    <!-- AOS локально -->
+    <script src="/static/js/aos.js"></script>
+    
+    <!-- Ваши скрипты -->
+    <script src="js/api.js"></script>
+    <script src="js/fleet-manager.js" defer></script>
+    <script src="js/chat.js" defer></script>
+    <script src="js/main.js" defer></script>
+    <script src="js/mobile-menu.js" defer></script>
+    <script src="js/animations.js" defer></script>
+    <script src="js/lang-switcher.js" defer></script>
+    
+    <!-- ✅ Инициализация -->
+    <script>
+        // Critical JS - выполняется сразу
+        (function() {
+            'use strict';
+            
+            // Инициализация AOS (локальная версия)
+            if (typeof AOS !== 'undefined') {
+                AOS.init({
+                    duration: 800,
+                    once: true,
+                    offset: 100,
+                    easing: 'ease-out-cubic'
+                });
+            }
+            
+            // Utility functions
+            window.scrollToFleet = function() {
+                const fleetSection = document.getElementById('fleet');
+                if (fleetSection) {
+                    fleetSection.scrollIntoView({ 
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            };
+            
+            window.openContactForm = function() {
+                const contactSection = document.getElementById('contact');
+                if (contactSection) {
+                    contactSection.scrollIntoView({ 
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            };
+            
+            // Back to top
+            const backToTop = document.getElementById('backToTop');
+            if (backToTop) {
+                window.addEventListener('scroll', () => {
+                    if (window.pageYOffset > 300) {
+                        backToTop.classList.add('visible');
+                    } else {
+                        backToTop.classList.remove('visible');
+                    }
+                });
+                
+                backToTop.addEventListener('click', () => {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                });
+            }
+            
+            // Video controls
+            const video = document.querySelector('.luxury-car-video');
+            const pauseBtn = document.querySelector('.pause-btn');
+            const muteBtn = document.querySelector('.mute-btn');
+            
+            if (pauseBtn && video) {
+                pauseBtn.addEventListener('click', () => {
+                    if (video.paused) {
+                        video.play();
+                        pauseBtn.querySelector('.play-icon').style.display = 'block';
+                        pauseBtn.querySelector('.pause-icon').style.display = 'none';
+                    } else {
+                        video.pause();
+                        pauseBtn.querySelector('.play-icon').style.display = 'none';
+                        pauseBtn.querySelector('.pause-icon').style.display = 'block';
+                    }
+                });
+            }
+            
+            if (muteBtn && video) {
+                muteBtn.addEventListener('click', () => {
+                    video.muted = !video.muted;
+                    muteBtn.classList.toggle('muted', video.muted);
+                });
+            }
+            
+            // Скрыть кнопку "Выбрать авто" в хедере на мобильных
+            function checkMobileButton() {
+                const desktopBookBtn = document.querySelector('.desktop-book-btn');
+                if (desktopBookBtn) {
+                    if (window.innerWidth <= 768) {
+                        desktopBookBtn.style.display = 'none';
+                    } else {
+                        desktopBookBtn.style.display = 'flex';
+                    }
+                }
+            }
+            
+            // Проверять при загрузке и изменении размера
+            window.addEventListener('load', checkMobileButton);
+            window.addEventListener('resize', checkMobileButton);
+            
+            // ✅ ДОБАВЛЕНО: Service Worker для PWA (опционально)
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('/sw.js')
+                        .then(registration => {
+                            console.log('ServiceWorker зарегистрирован');
+                        })
+                        .catch(err => {
+                            console.log('ServiceWorker ошибка:', err);
+                        });
+                });
+            }
+            
+            // ✅ ДОБАВЛЕНО: Показать сообщение об ошибке API
+            setTimeout(() => {
+                const loadingElement = document.querySelector('.loading-cars');
+                if (loadingElement && loadingElement.parentElement.children.length === 1) {
+                    // Если через 10 секунд всё ещё показывается loading
+                    loadingElement.innerHTML = '<p>⚠️ Загрузка затянулась. Проверьте подключение к интернету.</p>';
+                    const errorMessage = document.getElementById('apiErrorMessage');
+                    if (errorMessage) {
+                        errorMessage.style.display = 'block';
+                    }
+                }
+            }, 10000);
+        })();
+    </script>
+    
+    <!-- ✅ Аналитика (опционально) -->
+    <!--
+    <script async src="https://www.googletagmanager.com/gtag/js?id=UA-XXXXX-Y"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'UA-XXXXX-Y');
+    </script>
+    -->
+</body>
+</html>
