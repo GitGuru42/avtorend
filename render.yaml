@@ -3,49 +3,61 @@ services:
   - type: web
     name: avtorend-api
     env: python
-    region: frankfurt  # Или oregon, singapore, ближе к пользователям
-    plan: free  # free, starter, или professional
+    region: frankfurt # Хороший выбор для RU/Европы
+    plan: free
     branch: main
     
-    # ✅ Важно: Если main.py в корне, а не в папке api
-    rootDirectory: .
-    
+    # ✅ Правильно: rootDirectory для монорепозитория, но обычно не нужен, если файлы в корне
+    # Если весь проект в корне репозитория, эту строку можно удалить.
+    # rootDirectory: .
+
     buildCommand: |
       pip install --upgrade pip
       pip install -r requirements.txt
-      # Создаем необходимые директории
+      # Создаем необходимые директории, если они не на диске
       mkdir -p static/uploads/cars
       mkdir -p static/uploads/temp
-    
-    # ✅ ИСПРАВЛЕННАЯ КОМАНДА (main.py в корне)
-    startCommand: gunicorn main:app --workers 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
-    
-    # ✅ Обязательные переменные окружения
+
+    # ✅ ИСПРАВЛЕНО: Более надежная команда для ASGI (FastAPI/Starlette) или WSGI (Flask/Django)
+    # Вариант A (для FastAPI/Starlette с Uvicorn):
+    # startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+
+    # Вариант B (универсальный Gunicorn, как у вас, но поправлено):
+    startCommand: gunicorn main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
+
+    # ⚠️ ВАЖНО: На плане 'free' используйте 1 worker, иначе превысите лимиты памяти
+    # Для 'free' плана:
+    # startCommand: gunicorn main:app --workers 1 --threads 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
+
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.0
+        value: "3.11.0"  # ✅ Кавычки для безопасности
       - key: ENVIRONMENT
         value: production
       - key: DEBUG
-        value: "false"
+        value: "false"    # ✅ Всегда строкой
       - key: SECRET_KEY
-        generateValue: true
+        generateValue: true  # ✅ Отлично, Render сам сгенерирует
       - key: DATABASE_URL
-        sync: false  # Будет настроена позже в панели Render
+        sync: false  # ✅ Правильно, подключите позже в Dashboard
       - key: ALLOWED_ORIGINS
-        value: "*"  # На время разработки, потом заменить
-    
-    # ✅ Диск для загрузок файлов (если нужно сохранять файлы между деплоями)
+        value: "https://your-frontend-domain.com,http://localhost:3000"  # ✅ Укажите явно
+      # ✅ ДОБАВЬТЕ эти ключевые переменные:
+      - key: PORT
+        value: "10000"  # Render всегда использует $PORT, но можно явно
+      - key: WEB_CONCURRENCY
+        value: "1"      # Критично для free-плана чтобы не упало по памяти
+
+    # ✅ Диск для постоянных файлов (загрузок)
     disk:
-      name: uploads
+      name: uploads-volume
       mountPath: /opt/render/project/src/static/uploads
       sizeGB: 1
-    
-    # ✅ Настройки деплоя
+
     autoDeploy: true
-    pullRequestPreviewsEnabled: true
-    
-    # ✅ Health check
+    pullRequestPreviewsEnabled: true  # Полезно для тестирования PR
+
+    # ✅ Health-check (убедитесь, что путь /health существует в приложении)
     healthCheckPath: /health
     healthCheckTimeout: 10
-    initialDelaySec: 45
+    initialDelaySec: 45  # Даёт время на запуск Python-приложения
