@@ -3,61 +3,50 @@ services:
   - type: web
     name: avtorend-api
     env: python
-    region: frankfurt # Хороший выбор для RU/Европы
+    region: frankfurt
     plan: free
     branch: main
     
-    # ✅ Правильно: rootDirectory для монорепозитория, но обычно не нужен, если файлы в корне
-    # Если весь проект в корне репозитория, эту строку можно удалить.
-    # rootDirectory: .
-
     buildCommand: |
       pip install --upgrade pip
       pip install -r requirements.txt
-      # Создаем необходимые директории, если они не на диске
       mkdir -p static/uploads/cars
       mkdir -p static/uploads/temp
 
-    # ✅ ИСПРАВЛЕНО: Более надежная команда для ASGI (FastAPI/Starlette) или WSGI (Flask/Django)
-    # Вариант A (для FastAPI/Starlette с Uvicorn):
-    # startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
-
-    # Вариант B (универсальный Gunicorn, как у вас, но поправлено):
-    startCommand: gunicorn main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
-
-    # ⚠️ ВАЖНО: На плане 'free' используйте 1 worker, иначе превысите лимиты памяти
-    # Для 'free' плана:
-    # startCommand: gunicorn main:app --workers 1 --threads 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
+    # Выберите ОДИН вариант startCommand:
+    # Для FastAPI:
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    
+    # ИЛИ для Flask/Django с Gunicorn:
+    # startCommand: gunicorn main:app --workers 1 --bind 0.0.0.0:$PORT
 
     envVars:
       - key: PYTHON_VERSION
-        value: "3.11.0"  # ✅ Кавычки для безопасности
+        value: "3.11.0"
       - key: ENVIRONMENT
         value: production
       - key: DEBUG
-        value: "false"    # ✅ Всегда строкой
+        value: "false"
       - key: SECRET_KEY
-        generateValue: true  # ✅ Отлично, Render сам сгенерирует
+        generateValue: true
       - key: DATABASE_URL
-        sync: false  # ✅ Правильно, подключите позже в Dashboard
+        sync: false
       - key: ALLOWED_ORIGINS
-        value: "https://your-frontend-domain.com,http://localhost:3000"  # ✅ Укажите явно
-      # ✅ ДОБАВЬТЕ эти ключевые переменные:
+        value: "http://localhost:3000,http://localhost:5173"
       - key: PORT
-        value: "10000"  # Render всегда использует $PORT, но можно явно
+        value: "10000"
       - key: WEB_CONCURRENCY
-        value: "1"      # Критично для free-плана чтобы не упало по памяти
+        value: "1"
 
-    # ✅ Диск для постоянных файлов (загрузок)
     disk:
       name: uploads-volume
       mountPath: /opt/render/project/src/static/uploads
       sizeGB: 1
 
     autoDeploy: true
-    pullRequestPreviewsEnabled: true  # Полезно для тестирования PR
+    pullRequestPreviewsEnabled: false  # На время разработки отключите
 
-    # ✅ Health-check (убедитесь, что путь /health существует в приложении)
+    # Health-check - ВСЕ с ОДИНАКОВЫМ отступом:
     healthCheckPath: /health
     healthCheckTimeout: 10
-    initialDelaySec: 45  # Даёт время на запуск Python-приложения
+    initialDelaySec: 45
