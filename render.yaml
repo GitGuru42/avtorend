@@ -45,8 +45,3 @@ services:
 
     autoDeploy: true
     pullRequestPreviewsEnabled: false  # На время разработки отключите
-
-    # Health-check - ВСЕ с ОДИНАКОВЫМ отступом:
-    healthCheckPath: /health
-    healthCheckTimeout: 10
-    initialDelaySec: 45
