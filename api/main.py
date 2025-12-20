@@ -1,12 +1,14 @@
 # main.py - Production ready для Render.com
 import os
 import sys
+import time
 from contextlib import asynccontextmanager
 from typing import List, Optional
 
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, Depends, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
 # ✅ Добавляем путь для импортов на Render
@@ -104,9 +106,6 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 print(f"✅ Статика подключена из {static_dir}")
 
 # ✅ Добавляем middleware для логирования
-from fastapi import Request
-import time
-
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start_time = time.time()
@@ -147,9 +146,16 @@ async def health_check():
         "timestamp": time.time()
     }
 
+# Главная страница - HTML
 @app.get("/")
-def read_root():
-    """Корневой эндпоинт с информацией об API"""
+async def read_root():
+    """Главная страница сайта"""
+    return FileResponse("index.html")
+
+# API информация - отдельный эндпоинт
+@app.get("/api")
+async def api_info():
+    """Информация о доступных API эндпоинтах"""
     return {
         "message": "AvtoRend API работает!",
         "documentation": "/api/docs",
@@ -227,7 +233,6 @@ def get_cars(
         cars = query.offset(offset).limit(limit).all()
         
         # Добавляем заголовок с общим количеством
-        from fastapi import Response
         total_count = query.count()
         response = Response()
         response.headers["X-Total-Count"] = str(total_count)
@@ -253,33 +258,12 @@ def get_car(car_id: int, db: Session = Depends(get_db)):
 # ✅ Обработчик для favicon.ico
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
-    from fastapi.responses import FileResponse
     favicon_path = os.path.join(static_dir, "favicon.ico")
     if os.path.exists(favicon_path):
         return FileResponse(favicon_path)
     # Возвращаем пустой ответ с 204 статусом
-    from fastapi.responses import Response
     return Response(status_code=204)
 
-@app.get("/")
-async def read_root():
-    return FileResponse("index.html")
-
-# API информация - отдельный эндпоинт
-@app.get("/api")
-async def api_info():
-    return {
-        "message": "AvtoRend API работает!",
-        "documentation": "/api/docs",
-        "health_check": "/health",
-        "environment": "development",
-        "endpoints": {
-            "cars": "/api/cars",
-            "categories": "/api/categories",
-            "car_by_id": "/api/cars/{id}"
-        }
-    }
-    
 # ✅ Глобальный обработчик ошибок
 @app.exception_handler(404)
 async def not_found_exception_handler(request, exc):
