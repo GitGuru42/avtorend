@@ -380,6 +380,91 @@ async def debug_static():
             }
     return result
 
+# Эндпоинт для проверки базы данных
+@app.get("/debug/db")
+async def debug_db():
+    """Проверка состояния базы данных"""
+    try:
+        from sqlalchemy import text
+        
+        with engine.connect() as conn:
+            # Проверяем таблицы
+            result = conn.execute(text("""
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public'
+                ORDER BY table_name
+            """))
+            tables = [row[0] for row in result]
+            
+            # Проверяем данные в основных таблицах
+            data_counts = {}
+            for table in ['categories', 'cars']:
+                try:
+                    if table in tables:
+                        result = conn.execute(text(f"SELECT COUNT(*) FROM {table}"))
+                        data_counts[table] = result.scalar()
+                    else:
+                        data_counts[table] = "table not exists"
+                except:
+                    data_counts[table] = "error"
+            
+            return {
+                "status": "connected",
+                "tables": tables,
+                "data_counts": data_counts,
+                "engine_url": str(engine.url).split('@')[1] if '@' in str(engine.url) else str(engine.url)
+            }
+            
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# Простой эндпоинт для API
+@app.get("/api/test-data")
+async def test_data():
+    """Тестовый эндпоинт для проверки работы API и БД"""
+    try:
+        from api.database import SessionLocal
+        from api.models import Category, Car
+        
+        db = SessionLocal()
+        
+        # Получаем категории
+        categories = db.query(Category).filter(Category.is_active == True).all()
+        categories_data = [
+            {"id": cat.id, "name": cat.name, "slug": cat.slug}
+            for cat in categories
+        ]
+        
+        # Получаем автомобили
+        cars = db.query(Car).filter(Car.is_active == True).all()
+        cars_data = [
+            {
+                "id": car.id,
+                "brand": car.brand,
+                "model": car.model,
+                "year": car.year,
+                "price": car.daily_price,
+                "status": car.status.value
+            }
+            for car in cars
+        ]
+        
+        db.close()
+        
+        return {
+            "success": True,
+            "categories": categories_data,
+            "cars": cars_data,
+            "counts": {
+                "categories": len(categories_data),
+                "cars": len(cars_data)
+            }
+        }
+        
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 # ====================== MAIN ======================
 if __name__ == "__main__":
     import uvicorn
