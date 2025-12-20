@@ -1,17 +1,79 @@
-import sys
 import os
+import asyncio
 import logging
-from typing import List, Optional
-from datetime import datetime
 from pathlib import Path
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    Application, CommandHandler, MessageHandler, CallbackQueryHandler,
-    ConversationHandler, ContextTypes, filters
+# Настройка логирования
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
 )
-from sqlalchemy.orm import Session
-from PIL import Image
+logger = logging.getLogger(__name__)
+
+def start_bot():
+    """Основная функция запуска бота для Render"""
+    TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+    
+    if not TOKEN:
+        logger.error("❌ TELEGRAM_BOT_TOKEN не найден!")
+        print("❌ ОШИБКА: TELEGRAM_BOT_TOKEN не установлен!")
+        return
+    
+    print(f"🤖 Запуск бота с токеном: {TOKEN[:10]}...")
+    
+    # Импорты внутри функции чтобы избежать циклических зависимостей
+    from telegram.ext import Application, CommandHandler
+    from telegram import Update
+    
+    async def simple_start(update: Update, context):
+        await update.message.reply_text("🚗 Бот AvtoRend работает на Render!")
+    
+    async def help_command(update: Update, context):
+        await update.message.reply_text(
+            "📋 Команды бота:\n"
+            "/start - Проверка работы\n"
+            "/help - Помощь\n"
+            "Бот работает в фоновом режиме"
+        )
+    
+    async def main_async():
+        """Асинхронная функция запуска бота"""
+        try:
+            # Создаем приложение
+            application = Application.builder().token(TOKEN).build()
+            
+            # Регистрируем команды
+            application.add_handler(CommandHandler("start", simple_start))
+            application.add_handler(CommandHandler("help", help_command))
+            
+            # Запускаем polling в асинхронном режиме
+            print("🤖 Бот запускается...")
+            
+            # Используем асинхронный polling
+            await application.initialize()
+            await application.start()
+            await application.updater.start_polling(
+                drop_pending_updates=True,
+                allowed_updates=Update.ALL_TYPES
+            )
+            
+            print("✅ Telegram bot запущен и работает!")
+            
+            # Бесконечный цикл чтобы бот не завершался
+            while True:
+                await asyncio.sleep(3600)  # Спим 1 час
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка бота: {e}")
+            print(f"❌ ОШИБКА БОТА: {e}")
+    
+    # Запускаем асинхронную функцию
+    try:
+        asyncio.run(main_async())
+    except KeyboardInterrupt:
+        print("🛑 Бот остановлен")
+    except Exception as e:
+        print(f"❌ Критическая ошибка: {e}")
 
 def start_bot():
     """Функция запуска бота для использования в потоке (из main.py)"""
