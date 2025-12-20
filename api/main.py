@@ -62,6 +62,33 @@ async def lifespan(app: FastAPI):
         print(f"⚠️ Предупреждение при запуске: {e}")
     
     yield
+
+    try:
+            from api.telegram_bot import start_bot
+            import threading
+            
+            print("🤖 Инициализация Telegram бота...")
+            
+            # Запускаем бота в отдельном потоке
+            bot_thread = threading.Thread(
+                target=start_bot,
+                daemon=True,  # Демон-поток (завершится с основным)
+                name="TelegramBot"
+            )
+            bot_thread.start()
+            print("✅ Telegram bot запущен в фоновом режиме")
+            
+        except ImportError as e:
+            print(f"⚠️ Файл бота не найден: {e}")
+            print(f"Путь: {os.path.join(current_dir, 'telegram_bot.py')}")
+        except Exception as e:
+            print(f"❌ Ошибка запуска бота: {e}")
+        # ========================================
+        
+    except Exception as e:
+        print(f"⚠️ Предупреждение при запуске: {e}")
+    
+    yield
     
     # Shutdown
     print("🛑 Shutting down AvtoRend API...")
