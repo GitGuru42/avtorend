@@ -13,6 +13,64 @@ from telegram.ext import (
 from sqlalchemy.orm import Session
 from PIL import Image
 
+def start_bot():
+    """Функция запуска бота для использования в потоке (из main.py)"""
+    import os
+    import logging
+    
+    # Минимальная настройка логгера
+    logging.basicConfig(
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        level=logging.INFO
+    )
+    logger = logging.getLogger(__name__)
+    
+    TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+    
+    if not TOKEN:
+        logger.error("❌ TELEGRAM_BOT_TOKEN не найден!")
+        print("❌ ОШИБКА: TELEGRAM_BOT_TOKEN не установлен!")
+        return
+    
+    try:
+        from telegram.ext import Application
+        
+        print(f"🤖 Запуск бота с токеном: {TOKEN[:10]}...")
+        
+        # Упрощенное создание приложения
+        application = Application.builder().token(TOKEN).build()
+        
+        # Добавляем базовые команды
+        from telegram import Update
+        from telegram.ext import CommandHandler
+        
+        async def simple_start(update: Update, context):
+            await update.message.reply_text("🚗 Бот работает!")
+        
+        application.add_handler(CommandHandler("start", simple_start))
+        application.add_handler(CommandHandler("help", simple_start))
+        
+        print("🤖 Бот запущен (polling mode)...")
+        print("✅ Отправьте /start боту в Telegram")
+        
+        # Запускаем polling
+        application.run_polling(
+            drop_pending_updates=True,
+            allowed_updates=Update.ALL_TYPES
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка в боте: {e}")
+        print(f"❌ КРИТИЧЕСКАЯ ОШИБКА БОТА: {e}")
+
+# А эту функцию main() уберите или оставьте для локального запуска
+def main():
+    """Альтернативная точка входа для локального запуска"""
+    start_bot()
+
+if __name__ == "__main__":
+    main()
+
 # ✅ ИСПРАВЛЕНО: правильные импорты для Render
 # Убираем sys.path.append - используем относительные импорты
 try:
