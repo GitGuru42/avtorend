@@ -43,24 +43,24 @@ async def lifespan(app: FastAPI):
     print("🚀 Starting AvtoRend API...")
     
     try:
-    # ========= СОЗДАНИЕ ТАБЛИЦ В БАЗЕ =========
-    if Base and engine:
-        print("🗄️  Создание таблиц в базе данных...")
-        try:
-            # ПРОСТОЕ создание таблиц
-            Base.metadata.create_all(bind=engine)
-            print("✅ Таблицы созданы (если их не было)")
-            
-            # Простая проверка без сложного SQL
-            from sqlalchemy import text
-            with engine.connect() as conn:
-                # Простой запрос для проверки
-                result = conn.execute(text("SELECT current_database()"))
-                db_name = result.scalar()
-                print(f"📊 База данных: {db_name}")
+        # ========= СОЗДАНИЕ ТАБЛИЦ В БАЗЕ =========
+        if Base and engine:
+            print("🗄️  Создание таблиц в базе данных...")
+            try:
+                # ПРОСТОЕ создание таблиц
+                Base.metadata.create_all(bind=engine)
+                print("✅ Таблицы созданы (если их не было)")
                 
-        except Exception as db_error:
-            print(f"⚠️  Предупреждение при создании таблиц: {db_error}")
+                # Простая проверка без сложного SQL
+                from sqlalchemy import text
+                with engine.connect() as conn:
+                    # Простой запрос для проверки
+                    result = conn.execute(text("SELECT current_database()"))
+                    db_name = result.scalar()
+                    print(f"📊 База данных: {db_name}")
+                    
+            except Exception as db_error:
+                print(f"⚠️  Предупреждение при создании таблиц: {db_error}")
         
         # ========= СОЗДАНИЕ ДИРЕКТОРИЙ =========
         os.makedirs("static/uploads/cars", exist_ok=True)
@@ -88,7 +88,69 @@ async def lifespan(app: FastAPI):
             print(f"Путь: {os.path.join(current_dir, 'telegram_bot.py')}")
         except Exception as e:
             print(f"❌ Ошибка запуска бота: {e}")
-        # ========================================
+        
+        # ========= ДОБАВЛЕНИЕ ТЕСТОВЫХ ДАННЫХ =========
+        try:
+            from sqlalchemy.orm import Session
+            from api.database import SessionLocal
+            from api.models import Category, Car, CarStatus, TransmissionType
+            
+            db = SessionLocal()
+            
+            # Проверяем есть ли категории
+            categories_count = db.query(Category).count()
+            if categories_count == 0:
+                print("📝 Добавляем тестовые категории...")
+                
+                categories = [
+                    Category(name="Эконом", slug="economy", icon="eco", description="Бюджетные автомобили"),
+                    Category(name="Комфорт", slug="comfort", icon="comfort", description="Автомобили среднего класса"),
+                    Category(name="Бизнес", slug="business", icon="business", description="Автомобили для деловых поездок"),
+                    Category(name="Премиум", slug="premium", icon="premium", description="Люкс автомобили"),
+                ]
+                
+                for cat in categories:
+                    db.add(cat)
+                db.commit()
+                print(f"✅ Добавлено категорий: {len(categories)}")
+            
+            # Проверяем есть ли автомобили
+            cars_count = db.query(Car).count()
+            if cars_count == 0:
+                print("🚗 Добавляем тестовые автомобили...")
+                
+                # Получаем первую категорию
+                category = db.query(Category).first()
+                
+                if category:
+                    car = Car(
+                        brand="Toyota",
+                        model="Camry",
+                        year=2022,
+                        license_plate="A123BC",
+                        category_id=category.id,
+                        engine_capacity=2.5,
+                        horsepower=203,
+                        fuel_type="бензин",
+                        transmission=TransmissionType.AUTOMATIC,
+                        fuel_consumption=8.5,
+                        doors=4,
+                        seats=5,
+                        color="Черный",
+                        daily_price=3000,
+                        deposit=15000,
+                        mileage=15000,
+                        status=CarStatus.AVAILABLE,
+                        is_active=True
+                    )
+                    db.add(car)
+                    db.commit()
+                    print(f"✅ Добавлен тестовый автомобиль: {car.brand} {car.model}")
+            
+            db.close()
+            
+        except Exception as e:
+            print(f"⚠️  Ошибка добавления тестовых данных: {e}")
         
     except Exception as e:
         print(f"⚠️ Предупреждение при запуске: {e}")
@@ -96,12 +158,6 @@ async def lifespan(app: FastAPI):
     yield  # ⬅️ ТОЛЬКО ОДИН YIELD ЗДЕСЬ!
     
     # ========= SHUTDOWN (после yield) =========
-    # Shutdown
-    print("🛑 Shutting down AvtoRend API...")
-    if engine:
-        engine.dispose()
-        print("✅ Соединение с БД закрыто")
-    
     # Shutdown
     print("🛑 Shutting down AvtoRend API...")
     if engine:
