@@ -37,33 +37,38 @@ except ImportError as e:
         models = None
         schemas = None
 
-# ✅ Lifespan manager для FastAPI 2.4+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     print("🚀 Starting AvtoRend API...")
     
     try:
-        # Создаем таблицы если их нет
+        # ========= СОЗДАНИЕ ТАБЛИЦ В БАЗЕ =========
         if Base and engine:
-            Base.metadata.create_all(bind=engine)
-            print("✅ Таблицы базы данных проверены/созданы")
+            print("🗄️  Создание таблиц в базе данных...")
+            try:
+                Base.metadata.create_all(bind=engine)
+                
+                # Проверяем какие таблицы создались
+                with engine.connect() as conn:
+                    result = conn.execute("""
+                        SELECT table_name 
+                        FROM information_schema.tables 
+                        WHERE table_schema = 'public'
+                    """)
+                    tables = [row[0] for row in result]
+                    print(f"✅ Создано таблиц: {len(tables)}")
+                    print(f"📋 Таблицы: {tables}")
+            except Exception as db_error:
+                print(f"❌ Ошибка создания таблиц: {db_error}")
         
-        # Создаем директории для файлов
+        # ========= СОЗДАНИЕ ДИРЕКТОРИЙ =========
         os.makedirs("static/uploads/cars", exist_ok=True)
         os.makedirs("static/uploads/temp", exist_ok=True)
         print("✅ Директории созданы")
         
-        # Проверяем подключение к БД
-        if engine:
-            with engine.connect() as conn:
-                print("✅ Подключение к базе данных успешно")
-    except Exception as e:
-        print(f"⚠️ Предупреждение при запуске: {e}")
-    
-    yield
-
-    try:
+        # ========= ЗАПУСК ТЕЛЕГРАМ БОТА =========
+        try:
             from api.telegram_bot import start_bot
             import threading
             
@@ -88,7 +93,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"⚠️ Предупреждение при запуске: {e}")
     
-    yield
+    yield  # ⬅️ ТОЛЬКО ОДИН YIELD ЗДЕСЬ!
+    
+    # ========= SHUTDOWN (после yield) =========
+    # Shutdown
+    print("🛑 Shutting down AvtoRend API...")
+    if engine:
+        engine.dispose()
+        print("✅ Соединение с БД закрыто")
     
     # Shutdown
     print("🛑 Shutting down AvtoRend API...")
