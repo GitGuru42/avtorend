@@ -261,6 +261,25 @@ async def favicon():
     from fastapi.responses import Response
     return Response(status_code=204)
 
+@app.get("/")
+async def read_root():
+    return FileResponse("index.html")
+
+# API информация - отдельный эндпоинт
+@app.get("/api")
+async def api_info():
+    return {
+        "message": "AvtoRend API работает!",
+        "documentation": "/api/docs",
+        "health_check": "/health",
+        "environment": "development",
+        "endpoints": {
+            "cars": "/api/cars",
+            "categories": "/api/categories",
+            "car_by_id": "/api/cars/{id}"
+        }
+    }
+    
 # ✅ Глобальный обработчик ошибок
 @app.exception_handler(404)
 async def not_found_exception_handler(request, exc):
