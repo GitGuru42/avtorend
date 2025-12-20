@@ -43,24 +43,24 @@ async def lifespan(app: FastAPI):
     print("🚀 Starting AvtoRend API...")
     
     try:
-        # ========= СОЗДАНИЕ ТАБЛИЦ В БАЗЕ =========
-        if Base and engine:
-            print("🗄️  Создание таблиц в базе данных...")
-            try:
-                Base.metadata.create_all(bind=engine)
+    # ========= СОЗДАНИЕ ТАБЛИЦ В БАЗЕ =========
+    if Base and engine:
+        print("🗄️  Создание таблиц в базе данных...")
+        try:
+            # ПРОСТОЕ создание таблиц
+            Base.metadata.create_all(bind=engine)
+            print("✅ Таблицы созданы (если их не было)")
+            
+            # Простая проверка без сложного SQL
+            from sqlalchemy import text
+            with engine.connect() as conn:
+                # Простой запрос для проверки
+                result = conn.execute(text("SELECT current_database()"))
+                db_name = result.scalar()
+                print(f"📊 База данных: {db_name}")
                 
-                # Проверяем какие таблицы создались
-                with engine.connect() as conn:
-                    result = conn.execute("""
-                        SELECT table_name 
-                        FROM information_schema.tables 
-                        WHERE table_schema = 'public'
-                    """)
-                    tables = [row[0] for row in result]
-                    print(f"✅ Создано таблиц: {len(tables)}")
-                    print(f"📋 Таблицы: {tables}")
-            except Exception as db_error:
-                print(f"❌ Ошибка создания таблиц: {db_error}")
+        except Exception as db_error:
+            print(f"⚠️  Предупреждение при создании таблиц: {db_error}")
         
         # ========= СОЗДАНИЕ ДИРЕКТОРИЙ =========
         os.makedirs("static/uploads/cars", exist_ok=True)
