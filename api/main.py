@@ -4,11 +4,12 @@ import sys
 import time
 from contextlib import asynccontextmanager
 from typing import List, Optional
+from pathlib import Path
 
-from fastapi import FastAPI, Depends, HTTPException, Query, Request
+from fastapi import FastAPI, Depends, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 # ✅ Добавляем путь для импортов на Render
@@ -96,14 +97,33 @@ app.add_middleware(
     max_age=600  # Кэшировать preflight на 10 минут
 )
 
-# ✅ Подключаем статику
-static_dir = "static"
-if not os.path.exists(static_dir):
-    os.makedirs(static_dir, exist_ok=True)
-    print(f"📁 Создана папка {static_dir}")
+# ✅ ПОДКЛЮЧАЕМ ВСЕ СТАТИЧЕСКИЕ ПАПКИ
+print("📁 Настройка статических файлов...")
 
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
-print(f"✅ Статика подключена из {static_dir}")
+# Определяем корневую директорию проекта
+BASE_DIR = Path.cwd()
+
+# Все папки которые нужно обслуживать как статику
+STATIC_DIRS = [
+    ("/styles", "styles"),
+    ("/js", "js"), 
+    ("/locales", "locales"),
+    ("/static", "static"),
+    ("/images", "images")  # если есть
+]
+
+for route, dir_name in STATIC_DIRS:
+    dir_path = BASE_DIR / dir_name
+    if dir_path.exists():
+        app.mount(route, StaticFiles(directory=str(dir_path)), name=dir_name)
+        print(f"✅ Статика подключена: {route} -> {dir_path}")
+        
+        # Показываем несколько файлов для проверки
+        files = list(dir_path.glob("*.*"))[:3]  # только файлы с расширениями
+        if files:
+            print(f"   Примеры файлов: {[f.name for f in files]}")
+    else:
+        print(f"⚠️  Папка не найдена: {dir_path}")
 
 # ✅ Добавляем middleware для логирования
 @app.middleware("http")
@@ -146,11 +166,18 @@ async def health_check():
         "timestamp": time.time()
     }
 
-# Главная страница - HTML
+# ГЛАВНАЯ СТРАНИЦА - только один эндпоинт /
 @app.get("/")
 async def read_root():
     """Главная страница сайта"""
-    return FileResponse("index.html")
+    index_path = BASE_DIR / "index.html"
+    if index_path.exists():
+        return FileResponse(str(index_path))
+    else:
+        return JSONResponse(
+            status_code=404,
+            content={"error": "index.html не найден", "path": str(index_path)}
+        )
 
 # API информация - отдельный эндпоинт
 @app.get("/api")
@@ -258,28 +285,61 @@ def get_car(car_id: int, db: Session = Depends(get_db)):
 # ✅ Обработчик для favicon.ico
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
-    favicon_path = os.path.join(static_dir, "favicon.ico")
-    if os.path.exists(favicon_path):
-        return FileResponse(favicon_path)
+    favicon_path = BASE_DIR / "static" / "favicon.ico"
+    if favicon_path.exists():
+        return FileResponse(str(favicon_path))
     # Возвращаем пустой ответ с 204 статусом
     return Response(status_code=204)
 
-# ✅ Глобальный обработчик ошибок
-@app.exception_handler(404)
-async def not_found_exception_handler(request, exc):
-    return {
-        "error": "Ресурс не найден",
-        "path": request.url.path,
-        "message": "Запрашиваемый ресурс не существует"
-    }
+# ✅ Глобальный обработчик ошибок (ИСПРАВЛЕННЫЙ - возвращаем JSONResponse)
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
-@app.exception_handler(500)
-async def internal_exception_handler(request, exc):
-    return {
-        "error": "Внутренняя ошибка сервера",
-        "path": request.url.path,
-        "message": "Произошла внутренняя ошибка. Пожалуйста, попробуйте позже."
-    }
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": exc.detail,
+            "path": str(request.url.path)
+        }
+    )
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    import traceback
+    error_details = traceback.format_exc() if os.getenv("DEBUG") == "true" else None
+    
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Внутренняя ошибка сервера",
+            "path": str(request.url.path),
+            "message": "Произошла внутренняя ошибка. Пожалуйста, попробуйте позже.",
+            "details": error_details
+        }
+    )
+
+# ✅ Эндпоинт для проверки статики
+@app.get("/debug/static")
+async def debug_static():
+    """Отладка статических файлов"""
+    result = {}
+    for route, dir_name in STATIC_DIRS:
+        dir_path = BASE_DIR / dir_name
+        if dir_path.exists():
+            files = [f.name for f in dir_path.glob("*") if f.is_file()][:10]
+            result[dir_name] = {
+                "exists": True,
+                "path": str(dir_path),
+                "files": files,
+                "count": len(files)
+            }
+        else:
+            result[dir_name] = {
+                "exists": False,
+                "path": str(dir_path)
+            }
+    return result
 
 # ====================== MAIN ======================
 if __name__ == "__main__":
