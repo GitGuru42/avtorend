@@ -68,26 +68,26 @@ async def lifespan(app: FastAPI):
         print("✅ Директории созданы")
         
         # ========= ЗАПУСК ТЕЛЕГРАМ БОТА =========
-        try:
-            from api.telegram_bot import start_bot
-            import threading
+        # try:
+        #     from api.telegram_bot import start_bot
+        #     import threading
             
-            print("🤖 Инициализация Telegram бота...")
+        #     print("🤖 Инициализация Telegram бота...")
             
-            # Запускаем бота в отдельном потоке
-            bot_thread = threading.Thread(
-                target=start_bot,
-                daemon=True,  # Демон-поток (завершится с основным)
-                name="TelegramBot"
-            )
-            bot_thread.start()
-            print("✅ Telegram bot запущен в фоновом режиме")
+        #     # Запускаем бота в отдельном потоке
+        #     bot_thread = threading.Thread(
+        #         target=start_bot,
+        #         daemon=True,  # Демон-поток (завершится с основным)
+        #         name="TelegramBot"
+        #     )
+        #     bot_thread.start()
+        #     print("✅ Telegram bot запущен в фоновом режиме")
             
-        except ImportError as e:
-            print(f"⚠️ Файл бота не найден: {e}")
-            print(f"Путь: {os.path.join(current_dir, 'telegram_bot.py')}")
-        except Exception as e:
-            print(f"❌ Ошибка запуска бота: {e}")
+        # except ImportError as e:
+        #     print(f"⚠️ Файл бота не найден: {e}")
+        #     print(f"Путь: {os.path.join(current_dir, 'telegram_bot.py')}")
+        # except Exception as e:
+        #     print(f"❌ Ошибка запуска бота: {e}")
         
         # ========= ДОБАВЛЕНИЕ ТЕСТОВЫХ ДАННЫХ =========
         try:
