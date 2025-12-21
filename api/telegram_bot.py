@@ -116,23 +116,43 @@ def admin_only(func):
         return await func(update, context, *args, **kwargs)
     return wrapper
 
-# ========== ОСНОВНЫЕ КОМАНДЫ ==========
+# ========== ОТЛАДОЧНАЯ КОМАНДА ==========
+async def debug(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отладочная команда - показывает информацию"""
+    user_id = update.effective_user.id
+    username = update.effective_user.username or "без username"
+    
+    await update.message.reply_text(
+        f"🔧 *Отладка бота*\n\n"
+        f"👤 Ваш ID: `{user_id}`\n"
+        f"📛 Username: @{username}\n"
+        f"📋 ADMIN_IDS: `{ADMIN_IDS}`\n"
+        f"🔍 В списке админов: **{'✅ ДА' if user_id in ADMIN_IDS else '❌ НЕТ'}**\n\n"
+        f"📋 *Тестируйте команды:*\n"
+        f"• `/list_cars` - список авто\n"
+        f"• `/add_car` - добавить авто\n"
+        f"• `/status` - статус системы",
+        parse_mode='Markdown'
+    )
 
+# ========== ОСНОВНЫЕ КОМАНДЫ ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /start - панель администратора"""
     await update.message.reply_text(
         "🚗 *Админ-панель AvtoRend*\n\n"
         "📋 *Доступные команды:*\n"
-        "/add_car - Добавить новую машину\n"
-        "/list_cars - Показать все машины\n"
-        "/edit_car <id> <поле> <значение> - Редактировать машину\n"
-        "/delete_car <id> - Удалить машину\n"
-        "/status - Статус системы\n"
-        "/cancel - Отменить операцию\n\n"
-        "🔒 Доступ только для администраторов",
+        "• `/add_car` - Добавить новую машину\n"
+        "• `/list_cars` - Показать все машины\n"
+        "• `/edit_car <id> <поле> <значение>` - Редактировать\n"
+        "• `/delete_car <id>` - Удалить машину\n"
+        "• `/status` - Статус системы\n"
+        "• `/debug` - Отладка\n"
+        "• `/cancel` - Отменить операцию\n\n"
+        "🔧 *Примеры:*\n"
+        "`/delete_car 1`\n"
+        "`/edit_car 1 daily_price 3000`",
         parse_mode='Markdown'
     )
-
 
 async def admin_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Статус системы для администратора"""
@@ -162,7 +182,6 @@ async def admin_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(status_text, parse_mode='Markdown')
 
 # ========== ДОБАВЛЕНИЕ АВТОМОБИЛЯ ==========
-
 async def add_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Начать процесс добавления машины"""
     user_id = update.effective_user.id
@@ -628,7 +647,6 @@ async def process_confirmation(update: Update, context: ContextTypes.DEFAULT_TYP
     return ConversationHandler.END
 
 # ========== СПИСОК АВТОМОБИЛЕЙ ==========
-
 async def list_cars(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать список всех машин"""
     try:
@@ -670,11 +688,10 @@ async def list_cars(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Ошибка при загрузке списка автомобилей.")
 
 # ========== УДАЛЕНИЕ АВТОМОБИЛЯ ==========
-
 async def delete_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Удалить машину по ID"""
     if not context.args:
-        await update.message.reply_text("Используйте: /delete_car <ID автомобиля>")
+        await update.message.reply_text("Используйте: /delete_car <ID автомобиля>\nПример: `/delete_car 1`", parse_mode='Markdown')
         return
     
     try:
@@ -721,21 +738,20 @@ async def delete_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Ошибка при удалении автомобиля: {e}")
 
 # ========== РЕДАКТИРОВАНИЕ АВТОМОБИЛЯ ==========
-
 async def edit_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Редактировать машину по ID"""
     if not context.args:
         await update.message.reply_text(
             "*Используйте:* /edit_car <id> <поле> <значение>\n\n"
             "*Доступные поля:*\n"
-            "• daily_price - цена за день\n"
-            "• deposit - залог\n" 
-            "• status - статус (available, rented, maintenance, reserved, unavailable)\n"
-            "• mileage - пробег\n"
-            "• description - описание\n\n"
+            "• `daily_price` - цена за день\n"
+            "• `deposit` - залог\n" 
+            "• `status` - статус (available, rented, maintenance, reserved, unavailable)\n"
+            "• `mileage` - пробег\n"
+            "• `description` - описание\n\n"
             "*Пример:*\n"
-            "/edit_car 15 daily_price 3000\n"
-            "/edit_car 15 status maintenance",
+            "`/edit_car 1 daily_price 3000`\n"
+            "`/edit_car 1 status maintenance`",
             parse_mode='Markdown'
         )
         return
@@ -743,7 +759,8 @@ async def edit_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 3:
         await update.message.reply_text(
             "Недостаточно аргументов. Формат:\n"
-            "/edit_car <id> <поле> <значение>"
+            "`/edit_car <id> <поле> <значение>`",
+            parse_mode='Markdown'
         )
         return
     
@@ -840,7 +857,16 @@ def start_bot():
         # Создаем приложение
         application = Application.builder().token(TOKEN).build()
         
-        # ConversationHandler для добавления машины
+        # 1. РЕГИСТРИРУЕМ ОБЫЧНЫЕ КОМАНДЫ ПЕРВЫМИ
+        application.add_handler(CommandHandler("debug", debug))
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("status", admin_status))
+        application.add_handler(CommandHandler("list_cars", list_cars))
+        application.add_handler(CommandHandler("delete_car", delete_car))
+        application.add_handler(CommandHandler("edit_car", edit_car))
+        application.add_handler(CommandHandler("cancel", cancel))
+        
+        # 2. ПОТОМ ConversationHandler (важно - ПОСЛЕ обычных команд!)
         conv_handler = ConversationHandler(
             entry_points=[CommandHandler("add_car", add_car)],
             states={
@@ -872,21 +898,23 @@ def start_bot():
             per_message=False
         )
         
-        # Регистрируем все обработчики
-        application.add_handler(CommandHandler("start", start))
-        application.add_handler(CommandHandler("status", admin_status))
         application.add_handler(conv_handler)
-        application.add_handler(CommandHandler("list_cars", list_cars))
-        application.add_handler(CommandHandler("delete_car", delete_car))
-        application.add_handler(CommandHandler("edit_car", edit_car))
-        application.add_handler(CommandHandler("cancel", cancel))
         
         # Обработчик ошибок
         application.add_error_handler(error_handler)
         
         print("✅ Приложение создано")
-        print("🔄 Запуск polling...")
-        print("📱 Отправьте /start боту в Telegram")
+        print("✅ Зарегистрированы команды:")
+        print("   • /debug - отладка")
+        print("   • /start - начало работы")
+        print("   • /status - статус системы")
+        print("   • /list_cars - список авто")
+        print("   • /delete_car <id> - удалить авто")
+        print("   • /edit_car <id> <поле> <значение> - редактировать")
+        print("   • /add_car - добавить авто")
+        print("   • /cancel - отмена")
+        print("\n🔄 Запуск polling...")
+        print("📱 Отправьте /debug боту для проверки")
         print("=" * 60 + "\n")
         
         # Запускаем бота
