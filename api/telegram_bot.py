@@ -826,9 +826,16 @@ def start_bot():
     print(f"🤖 Запуск бота с токеном: {TOKEN[:15]}...")
     print(f"👑 Администраторы: {ADMIN_IDS if ADMIN_IDS else 'не настроены'}")
     
+    # Создаем новый event loop для этого потока
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
     try:
         # Создаем приложение
+        from telegram.ext import Application
         application = Application.builder().token(TOKEN).build()
+        
+        # ... (весь код регистрации обработчиков остается без изменений)
         
         # ConversationHandler для добавления машины
         conv_handler = ConversationHandler(
@@ -876,10 +883,11 @@ def start_bot():
         print("🚀 Бот запущен (polling mode)...")
         print("✅ Отправьте /start боту в Telegram")
         
-        # Запускаем бота
+        # Запускаем бота в созданном loop
         application.run_polling(
             drop_pending_updates=True,
-            allowed_updates=None
+            allowed_updates=None,
+            close_loop=False  # Не закрывать loop после остановки
         )
         
     except Exception as e:
@@ -887,6 +895,8 @@ def start_bot():
         print(f"❌ КРИТИЧЕСКАЯ ОШИБКА БОТА: {e}")
         import traceback
         print(traceback.format_exc())
+    finally:
+        loop.close()
 
 # ============== ДЛЯ ЛОКАЛЬНОГО ТЕСТИРОВАНИЯ ==============
 
