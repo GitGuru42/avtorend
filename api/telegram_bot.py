@@ -1,154 +1,13 @@
+"""
+telegram_bot.py - Полная админ-панель для AvtoRend
+Включает все функции управления автомобилями
+"""
+
 import os
-import asyncio
 import logging
+from datetime import datetime
 from pathlib import Path
-
-# Настройка логирования
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
-
-def start_bot():
-    """Основная функция запуска бота для Render"""
-    TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-    
-    if not TOKEN:
-        logger.error("❌ TELEGRAM_BOT_TOKEN не найден!")
-        print("❌ ОШИБКА: TELEGRAM_BOT_TOKEN не установлен!")
-        return
-    
-    print(f"🤖 Запуск бота с токеном: {TOKEN[:10]}...")
-    
-    # Импорты внутри функции чтобы избежать циклических зависимостей
-    from telegram.ext import Application, CommandHandler
-    from telegram import Update
-    
-    async def simple_start(update: Update, context):
-        await update.message.reply_text("🚗 Бот AvtoRend работает на Render!")
-    
-    async def help_command(update: Update, context):
-        await update.message.reply_text(
-            "📋 Команды бота:\n"
-            "/start - Проверка работы\n"
-            "/help - Помощь\n"
-            "Бот работает в фоновом режиме"
-        )
-    
-    async def main_async():
-        """Асинхронная функция запуска бота"""
-        try:
-            # Создаем приложение
-            application = Application.builder().token(TOKEN).build()
-            
-            # Регистрируем команды
-            application.add_handler(CommandHandler("start", simple_start))
-            application.add_handler(CommandHandler("help", help_command))
-            
-            # Запускаем polling в асинхронном режиме
-            print("🤖 Бот запускается...")
-            
-            # Используем асинхронный polling
-            await application.initialize()
-            await application.start()
-            await application.updater.start_polling(
-                drop_pending_updates=True,
-                allowed_updates=Update.ALL_TYPES
-            )
-            
-            print("✅ Telegram bot запущен и работает!")
-            
-            # Бесконечный цикл чтобы бот не завершался
-            while True:
-                await asyncio.sleep(3600)  # Спим 1 час
-            
-        except Exception as e:
-            logger.error(f"❌ Ошибка бота: {e}")
-            print(f"❌ ОШИБКА БОТА: {e}")
-    
-    # Запускаем асинхронную функцию
-    try:
-        asyncio.run(main_async())
-    except KeyboardInterrupt:
-        print("🛑 Бот остановлен")
-    except Exception as e:
-        print(f"❌ Критическая ошибка: {e}")
-
-def start_bot():
-    """Функция запуска бота для использования в потоке (из main.py)"""
-    import os
-    import logging
-    
-    # Минимальная настройка логгера
-    logging.basicConfig(
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        level=logging.INFO
-    )
-    logger = logging.getLogger(__name__)
-    
-    TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-    
-    if not TOKEN:
-        logger.error("❌ TELEGRAM_BOT_TOKEN не найден!")
-        print("❌ ОШИБКА: TELEGRAM_BOT_TOKEN не установлен!")
-        return
-    
-    try:
-        from telegram.ext import Application
-        
-        print(f"🤖 Запуск бота с токеном: {TOKEN[:10]}...")
-        
-        # Упрощенное создание приложения
-        application = Application.builder().token(TOKEN).build()
-        
-        # Добавляем базовые команды
-        from telegram import Update
-        from telegram.ext import CommandHandler
-        
-        async def simple_start(update: Update, context):
-            await update.message.reply_text("🚗 Бот работает!")
-        
-        application.add_handler(CommandHandler("start", simple_start))
-        application.add_handler(CommandHandler("help", simple_start))
-        
-        print("🤖 Бот запущен (polling mode)...")
-        print("✅ Отправьте /start боту в Telegram")
-        
-        # Запускаем polling
-        application.run_polling(
-            drop_pending_updates=True,
-            allowed_updates=Update.ALL_TYPES
-        )
-        
-    except Exception as e:
-        logger.error(f"❌ Ошибка в боте: {e}")
-        print(f"❌ КРИТИЧЕСКАЯ ОШИБКА БОТА: {e}")
-
-# А эту функцию main() уберите или оставьте для локального запуска
-def main():
-    """Альтернативная точка входа для локального запуска"""
-    start_bot()
-
-if __name__ == "__main__":
-    main()
-
-# ✅ ИСПРАВЛЕНО: правильные импорты для Render
-# Убираем sys.path.append - используем относительные импорты
-try:
-    # Для локальной разработки
-    from api.models import Car, Category, CarStatus, TransmissionType
-    from api.database import SessionLocal
-    from api.schemas import CarCreate
-except ImportError:
-    # Для Render или если структура другая
-    try:
-        from models import Car, Category, CarStatus, TransmissionType
-        from database import SessionLocal
-        from schemas import CarCreate
-    except ImportError as e:
-        logging.error(f"❌ Ошибка импорта: {e}")
-        raise
+from PIL import Image
 
 from dotenv import load_dotenv
 
@@ -162,22 +21,51 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Конфигурация
+# ============== КОНФИГУРАЦИЯ ==============
+
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 ADMIN_IDS = list(map(int, os.getenv("TELEGRAM_ADMIN_IDS", "").split(","))) if os.getenv("TELEGRAM_ADMIN_IDS") else []
 
-# ✅ ИСПРАВЛЕНО: Путь для загрузки изображений на Render
-# На Render используем абсолютный путь внутри контейнера
+# Путь для загрузки изображений
 if os.getenv("RENDER"):
-    # На Render
     UPLOAD_DIR = Path("/opt/render/project/src/static/uploads/cars")
 else:
-    # Локально
     UPLOAD_DIR = Path("static/uploads/cars")
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-# Состояния для ConversationHandler
+# ============== ИМПОРТЫ БАЗЫ ДАННЫХ ==============
+
+try:
+    from api.models import Car, Category, CarStatus, TransmissionType
+    from api.database import SessionLocal
+    from api.schemas import CarCreate
+    print("✅ Импорт из api.*")
+except ImportError:
+    try:
+        from models import Car, Category, CarStatus, TransmissionType
+        from database import SessionLocal
+        from schemas import CarCreate
+        print("✅ Импорт из корневой директории")
+    except ImportError as e:
+        print(f"❌ Ошибка импорта БД: {e}")
+        raise
+
+# ============== ИМПОРТЫ TELEGRAM ==============
+
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    Application, 
+    CommandHandler, 
+    MessageHandler, 
+    CallbackQueryHandler,
+    ConversationHandler,
+    filters,
+    ContextTypes
+)
+
+# ============== СОСТОЯНИЯ ДЛЯ ConversationHandler ==============
+
 (
     BRAND, MODEL, YEAR, LICENSE_PLATE, CATEGORY_ID, 
     ENGINE_CAPACITY, HORSEPOWER, FUEL_TYPE, TRANSMISSION,
@@ -185,8 +73,10 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     DEPOSIT, MILEAGE, FEATURES, DESCRIPTION, PHOTOS, CONFIRM
 ) = range(20)
 
-# Временное хранилище данных при добавлении машины
+# Временное хранилище данных
 user_data_store = {}
+
+# ============== ДЕКОРАТОРЫ ==============
 
 def admin_only(func):
     """Декоратор для ограничения доступа только администраторам"""
@@ -194,25 +84,63 @@ def admin_only(func):
         user_id = update.effective_user.id
         if not ADMIN_IDS:
             await update.message.reply_text("⚠️ ADMIN_IDS не настроены в .env файле")
-            return
+            return ConversationHandler.END
         if user_id not in ADMIN_IDS:
             await update.message.reply_text("⛔ У вас нет прав для выполнения этой команды.")
-            return
+            return ConversationHandler.END
         return await func(update, context, *args, **kwargs)
     return wrapper
 
+# ============== ОСНОВНЫЕ КОМАНДЫ ==============
+
 @admin_only
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /start"""
+    """Команда /start - панель администратора"""
     await update.message.reply_text(
-        "🚗 Добро пожаловать в панель управления автопарком!\n\n"
-        "Доступные команды:\n"
+        "🚗 *Админ-панель AvtoRend*\n\n"
+        "📋 *Доступные команды:*\n"
         "/add_car - Добавить новую машину\n"
-        "/edit_car <id> - Редактировать машину (укажите ID)\n"
-        "/delete_car <id> - Удалить машину (укажите ID)\n"
         "/list_cars - Показать все машины\n"
-        "/cancel - Отменить текущую операцию"
+        "/edit_car <id> <поле> <значение> - Редактировать машину\n"
+        "/delete_car <id> - Удалить машину\n"
+        "/status - Статус системы\n"
+        "/cancel - Отменить операцию\n\n"
+        "🔒 Доступ только для администраторов",
+        parse_mode='Markdown'
     )
+
+@admin_only
+async def admin_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Статус системы для администратора"""
+    import time
+    
+    # Проверяем базу данных
+    try:
+        db = SessionLocal()
+        cars_count = db.query(Car).count()
+        categories_count = db.query(Category).count()
+        db.close()
+        
+        db_status = "✅ Подключена"
+    except Exception as e:
+        db_status = f"❌ Ошибка: {str(e)[:50]}"
+        cars_count = "неизвестно"
+        categories_count = "неизвестно"
+    
+    status_text = (
+        f"📊 *Статус системы*\n\n"
+        f"🤖 Бот: ✅ Работает\n"
+        f"🗄️  База данных: {db_status}\n"
+        f"🚗 Автомобилей: {cars_count}\n"
+        f"📂 Категорий: {categories_count}\n"
+        f"👑 Админов: {len(ADMIN_IDS)}\n"
+        f"🌐 Хостинг: {'Render' if os.getenv('RENDER') else 'Локальный'}\n\n"
+        f"🟢 Система функционирует нормально"
+    )
+    
+    await update.message.reply_text(status_text, parse_mode='Markdown')
+
+# ============== ДОБАВЛЕНИЕ АВТОМОБИЛЯ ==============
 
 @admin_only
 async def add_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -221,8 +149,9 @@ async def add_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data_store[user_id] = {"photos": []}
     
     await update.message.reply_text(
-        "Давайте добавим новую машину.\n"
-        "Введите марку автомобиля (например: Toyota):"
+        "🚗 *Добавление нового автомобиля*\n\n"
+        "Введите марку автомобиля (например: Toyota):",
+        parse_mode='Markdown'
     )
     return BRAND
 
@@ -270,7 +199,7 @@ async def process_license_plate(update: Update, context: ContextTypes.DEFAULT_TY
         db.close()
         
         if not categories:
-            await update.message.reply_text("Нет доступных категорий. Сначала создайте категории через админку.")
+            await update.message.reply_text("❌ Нет доступных категорий.")
             return ConversationHandler.END
         
         keyboard = []
@@ -281,13 +210,13 @@ async def process_license_plate(update: Update, context: ContextTypes.DEFAULT_TY
             )])
         
         await update.message.reply_text(
-            "Выберите категорию автомобиля:",
+            "📂 Выберите категорию автомобиля:",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return CATEGORY_ID
     except Exception as e:
         logger.error(f"Ошибка при получении категорий: {e}")
-        await update.message.reply_text("❌ Ошибка при загрузке категорий. Попробуйте позже.")
+        await update.message.reply_text("❌ Ошибка при загрузке категорий.")
         return ConversationHandler.END
 
 async def process_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -299,18 +228,15 @@ async def process_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     user_data_store[user_id]["category_id"] = category_id
     
-    # Получаем название категории для отображения
     try:
         db = SessionLocal()
         category = db.query(Category).filter(Category.id == category_id).first()
         db.close()
         
         category_name = category.name if category else f"ID: {category_id}"
-        await query.edit_message_text(f"Категория выбрана: {category_name}\n\n"
-                                      "Введите объем двигателя в литрах (например: 2.0):")
+        await query.edit_message_text(f"✅ Категория: {category_name}\n\nВведите объем двигателя в литрах (например: 2.0):")
         return ENGINE_CAPACITY
     except Exception as e:
-        logger.error(f"Ошибка при получении категории: {e}")
         await query.edit_message_text("❌ Ошибка при загрузке категории.")
         return ConversationHandler.END
 
@@ -379,8 +305,7 @@ async def process_transmission(update: Update, context: ContextTypes.DEFAULT_TYP
     user_id = query.from_user.id
     user_data_store[user_id]["transmission"] = trans_map[query.data]
     
-    await query.edit_message_text(f"Трансмиссия: {trans_map[query.data].value}\n\n"
-                                  "Введите расход топлива (л/100км, например: 8.5):")
+    await query.edit_message_text(f"✅ Трансмиссия: {trans_map[query.data].value}\n\nВведите расход топлива (л/100км, например: 8.5):")
     return FUEL_CONSUMPTION
 
 async def process_fuel_consumption(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -485,7 +410,7 @@ async def process_mileage(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data_store[user_id]["mileage"] = mileage
     
     await update.message.reply_text(
-        "Введите опции через запятую (например: кондиционер, подогрев сидений, парктроники):\n"
+        "Введите опции через запятую (например: кондиционер, подогрев сидений):\n"
         "Или отправьте 'нет', если опций нет:"
     )
     return FEATURES
@@ -518,7 +443,7 @@ async def process_description(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_data_store[user_id]["description"] = description
     
     await update.message.reply_text(
-        "Отправьте фотографии автомобиля (можно несколько).\n"
+        "📸 Отправьте фотографии автомобиля (можно несколько).\n"
         "После загрузки всех фото отправьте команду /done\n"
         "Минимум 1 фото рекомендуется."
     )
@@ -551,13 +476,11 @@ async def process_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.error(f"Ошибка оптимизации изображения: {e}")
         
-        # ✅ ИСПРАВЛЕНО: Сохраняем путь для web-доступа
-        # На Render статика доступна через /static/
+        # Сохраняем web-путь
         web_path = f"/static/uploads/cars/{filename}"
         user_data_store[user_id]["photos"].append(web_path)
         
-        await update.message.reply_text(f"✅ Фото сохранено! Загружено фото: {len(user_data_store[user_id]['photos'])}\n"
-                                        "Отправьте еще фото или /done для продолжения")
+        await update.message.reply_text(f"✅ Фото сохранено! Загружено фото: {len(user_data_store[user_id]['photos'])}\nОтправьте еще фото или /done для продолжения")
         return PHOTOS
     except Exception as e:
         logger.error(f"Ошибка загрузки фото: {e}")
@@ -576,7 +499,7 @@ async def process_done_photos(update: Update, context: ContextTypes.DEFAULT_TYPE
     data = user_data_store[user_id]
     
     summary = (
-        f"📋 Проверьте данные автомобиля:\n\n"
+        f"📋 *Проверьте данные автомобиля:*\n\n"
         f"🚗 {data['brand']} {data['model']} ({data['year']})\n"
         f"📌 Номер: {data['license_plate']}\n"
         f"📂 Категория ID: {data['category_id']}\n"
@@ -604,7 +527,8 @@ async def process_done_photos(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     await update.message.reply_text(
         summary,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
     )
     return CONFIRM
 
@@ -643,7 +567,7 @@ async def process_confirmation(update: Update, context: ContextTypes.DEFAULT_TYP
             "deposit": data["deposit"],
             "mileage": data["mileage"],
             "features": data.get("features", []),
-            "images": data.get("photos", []),  # Теперь здесь правильные пути
+            "images": data.get("photos", []),
             "thumbnail": data.get("photos", [""])[0] if data.get("photos") else None,
             "description": data.get("description"),
             "status": CarStatus.AVAILABLE,
@@ -665,12 +589,13 @@ async def process_confirmation(update: Update, context: ContextTypes.DEFAULT_TYP
         
         # Отправляем подтверждение
         await query.edit_message_text(
-            f"✅ Автомобиль успешно добавлен!\n"
-            f"ID: {db_car.id}\n"
-            f"Марка: {db_car.brand} {db_car.model}\n"
-            f"Категория: {category.name if category else 'Неизвестно'}\n"
-            f"Номер: {db_car.license_plate}\n"
-            f"Цена: {db_car.daily_price} руб./день"
+            f"✅ *Автомобиль успешно добавлен!*\n\n"
+            f"🆔 ID: {db_car.id}\n"
+            f"🚗 Марка: {db_car.brand} {db_car.model}\n"
+            f"📂 Категория: {category.name if category else 'Неизвестно'}\n"
+            f"📌 Номер: {db_car.license_plate}\n"
+            f"💰 Цена: {db_car.daily_price} руб./день",
+            parse_mode='Markdown'
         )
         
         # Очищаем временные данные
@@ -681,6 +606,8 @@ async def process_confirmation(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.edit_message_text(f"❌ Ошибка при сохранении: {str(e)}")
     
     return ConversationHandler.END
+
+# ============== СПИСОК АВТОМОБИЛЕЙ ==============
 
 @admin_only
 async def list_cars(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -694,8 +621,8 @@ async def list_cars(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("🚫 В базе нет автомобилей.")
             return
         
-        message = "📋 Список автомобилей:\n\n"
-        for car in cars:
+        message = "📋 *Список автомобилей:*\n\n"
+        for car in cars[:10]:  # Ограничиваем 10 машинами
             status_icons = {
                 "available": "✅",
                 "rented": "🔴",
@@ -706,24 +633,24 @@ async def list_cars(update: Update, context: ContextTypes.DEFAULT_TYPE):
             icon = status_icons.get(car.status.value, "❓")
             
             message += (
-                f"{icon} ID: {car.id}\n"
+                f"{icon} *ID: {car.id}*\n"
                 f"   {car.brand} {car.model} ({car.year})\n"
                 f"   Номер: {car.license_plate}\n"
                 f"   Цена: {car.daily_price} руб./день\n"
-                f"   Статус: {car.status.value}\n"
-                f"   ---\n"
+                f"   Статус: {car.status.value}\n\n"
             )
         
-        # Разбиваем сообщение если слишком длинное
-        if len(message) > 4000:
-            parts = [message[i:i+4000] for i in range(0, len(message), 4000)]
-            for part in parts:
-                await update.message.reply_text(part)
-        else:
-            await update.message.reply_text(message)
+        if len(cars) > 10:
+            message += f"... и еще {len(cars) - 10} автомобилей\n"
+        
+        message += f"Всего: *{len(cars)}* автомобилей"
+        
+        await update.message.reply_text(message, parse_mode='Markdown')
     except Exception as e:
         logger.error(f"Ошибка при получении списка автомобилей: {e}")
         await update.message.reply_text("❌ Ошибка при загрузке списка автомобилей.")
+
+# ============== УДАЛЕНИЕ АВТОМОБИЛЯ ==============
 
 @admin_only
 async def delete_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -754,8 +681,6 @@ async def delete_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if image_path.startswith('/static/'):
                     local_path = image_path[8:]  # Убираем '/static/'
                     file_path = Path("static") / local_path
-                else:
-                    file_path = Path("static/uploads/cars") / Path(image_path).name
                 
                 if file_path.exists():
                     file_path.unlink()
@@ -767,28 +692,42 @@ async def delete_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.commit()
         db.close()
         
-        await update.message.reply_text(f"✅ Автомобиль {car.brand} {car.model} (ID: {car.id}) удален")
+        await update.message.reply_text(
+            f"✅ *Автомобиль удален*\n\n"
+            f"🚗 {car.brand} {car.model}\n"
+            f"🆔 ID: {car.id}\n"
+            f"📌 Номер: {car.license_plate}",
+            parse_mode='Markdown'
+        )
     except Exception as e:
         logger.error(f"Ошибка удаления автомобиля: {e}")
         await update.message.reply_text(f"❌ Ошибка при удалении автомобиля: {e}")
+
+# ============== РЕДАКТИРОВАНИЕ АВТОМОБИЛЯ ==============
 
 @admin_only
 async def edit_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Редактировать машину по ID"""
     if not context.args:
-        await update.message.reply_text("Используйте: /edit_car <ID автомобиля>")
         await update.message.reply_text(
-            "Доступные поля для редактирования:\n"
-            "daily_price, deposit, status, mileage, description\n"
-            "Пример: /edit_car 15 daily_price 3000"
+            "*Используйте:* /edit_car <id> <поле> <значение>\n\n"
+            "*Доступные поля:*\n"
+            "• daily_price - цена за день\n"
+            "• deposit - залог\n" 
+            "• status - статус (available, rented, maintenance, reserved, unavailable)\n"
+            "• mileage - пробег\n"
+            "• description - описание\n\n"
+            "*Пример:*\n"
+            "/edit_car 15 daily_price 3000\n"
+            "/edit_car 15 status maintenance",
+            parse_mode='Markdown'
         )
         return
     
     if len(context.args) < 3:
         await update.message.reply_text(
             "Недостаточно аргументов. Формат:\n"
-            "/edit_car <id> <поле> <значение>\n"
-            "Пример: /edit_car 15 daily_price 3000"
+            "/edit_car <id> <поле> <значение>"
         )
         return
     
@@ -809,6 +748,8 @@ async def edit_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"❌ Автомобиль с ID {car_id} не найден")
             return
         
+        old_value = getattr(car, field, None)
+        
         # Обновляем поле
         if field == "daily_price":
             car.daily_price = float(value)
@@ -821,7 +762,7 @@ async def edit_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 car.status = CarStatus(value)
             else:
                 await update.message.reply_text(
-                    f"Неверный статус. Допустимые значения: {', '.join([s.value for s in CarStatus])}"
+                    f"❌ Неверный статус. Допустимые: {', '.join([s.value for s in CarStatus])}"
                 )
                 db.close()
                 return
@@ -829,19 +770,24 @@ async def edit_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
             car.description = value
         else:
             await update.message.reply_text(
-                f"Поле '{field}' недоступно для редактирования через бота"
+                f"❌ Поле '{field}' недоступно для редактирования"
             )
             db.close()
             return
         
         db.commit()
         await update.message.reply_text(
-            f"✅ Автомобиль ID: {car_id} обновлен\n"
-            f"Поле '{field}' изменено на '{value}'"
+            f"✅ *Автомобиль обновлен*\n\n"
+            f"🆔 ID: {car_id}\n"
+            f"🚗 {car.brand} {car.model}\n"
+            f"📌 Поле: {field}\n"
+            f"🔄 Было: {old_value}\n"
+            f"➡️ Стало: {value}",
+            parse_mode='Markdown'
         )
         
     except ValueError as e:
-        await update.message.reply_text(f"Неверное значение для поля {field}: {e}")
+        await update.message.reply_text(f"❌ Неверное значение для поля {field}: {e}")
     except Exception as e:
         logger.error(f"Ошибка редактирования автомобиля: {e}")
         await update.message.reply_text(f"❌ Ошибка при редактировании: {e}")
@@ -851,10 +797,13 @@ async def edit_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
 
+# ============== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==============
+
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Отмена текущей операции"""
     user_id = update.effective_user.id
-    user_data_store.pop(user_id, None)
+    if user_id in user_data_store:
+        user_data_store.pop(user_id, None)
     await update.message.reply_text("Операция отменена.")
     return ConversationHandler.END
 
@@ -862,83 +811,85 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик ошибок"""
     logger.error(f"Update {update} вызвал ошибку {context.error}")
     if update and update.message:
-        await update.message.reply_text("Произошла ошибка. Попробуйте еще раз.")
+        await update.message.reply_text("❌ Произошла ошибка. Попробуйте еще раз.")
 
-def main():
-    """Запуск бота"""
+# ============== ЗАПУСК БОТА ==============
+
+def start_bot():
+    """Основная функция запуска бота для main.py"""
+    
     if not TOKEN:
-        logger.error("❌ TELEGRAM_BOT_TOKEN не установлен в .env файле")
-        print("❌ TELEGRAM_BOT_TOKEN не установлен. Проверьте .env файл")
+        logger.error("❌ TELEGRAM_BOT_TOKEN не найден!")
+        print("❌ ОШИБКА: TELEGRAM_BOT_TOKEN не установлен!")
         return
     
-    if not ADMIN_IDS:
-        logger.warning("⚠️  ADMIN_IDS не настроены. Бот будет доступен всем.")
-        print("⚠️  ВНИМАНИЕ: ADMIN_IDS не настроены. Добавьте TELEGRAM_ADMIN_IDS в .env")
-    
-    # Создаем приложение
-    application = Application.builder().token(TOKEN).build()
-    
-    # ConversationHandler для добавления машины
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("add_car", add_car)],
-        states={
-            BRAND: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_brand)],
-            MODEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_model)],
-            YEAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_year)],
-            LICENSE_PLATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_license_plate)],
-            CATEGORY_ID: [CallbackQueryHandler(process_category, pattern="^cat_")],
-            ENGINE_CAPACITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_engine_capacity)],
-            HORSEPOWER: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_horsepower)],
-            FUEL_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_fuel_type)],
-            TRANSMISSION: [CallbackQueryHandler(process_transmission, pattern="^trans_")],
-            FUEL_CONSUMPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_fuel_consumption)],
-            DOORS: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_doors)],
-            SEATS: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_seats)],
-            COLOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_color)],
-            DAILY_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_daily_price)],
-            DEPOSIT: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_deposit)],
-            MILEAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_mileage)],
-            FEATURES: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_features)],
-            DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_description)],
-            PHOTOS: [
-                MessageHandler(filters.PHOTO, process_photo),
-                CommandHandler("done", process_done_photos)
-            ],
-            CONFIRM: [CallbackQueryHandler(process_confirmation, pattern="^confirm_")]
-        },
-        fallbacks=[CommandHandler("cancel", cancel)]
-    )
-    
-    # Регистрируем обработчики
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(conv_handler)
-    application.add_handler(CommandHandler("list_cars", list_cars))
-    application.add_handler(CommandHandler("delete_car", delete_car))
-    application.add_handler(CommandHandler("edit_car", edit_car))
-    application.add_handler(CommandHandler("cancel", cancel))
-    
-    # Обработчик ошибок
-    application.add_error_handler(error_handler)
-    
-    # Запускаем бота
-    logger.info("🤖 Бот запущен...")
-    print("🚀 Telegram бот запущен!")
+    print(f"🤖 Запуск бота с токеном: {TOKEN[:15]}...")
     print(f"👑 Администраторы: {ADMIN_IDS if ADMIN_IDS else 'не настроены'}")
     
-    # ✅ ИСПРАВЛЕНО: Правильный запуск для production
-    if os.getenv("RENDER"):
-        # На Render используем webhook
-        print("🌐 Режим: Render (Production)")
-        application.run_webhook(
-            listen="0.0.0.0",
-            port=int(os.getenv("PORT", 8443)),
-            url_path=TOKEN,
-            webhook_url=f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}/{TOKEN}"
+    try:
+        # Создаем приложение
+        application = Application.builder().token(TOKEN).build()
+        
+        # ConversationHandler для добавления машины
+        conv_handler = ConversationHandler(
+            entry_points=[CommandHandler("add_car", add_car)],
+            states={
+                BRAND: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_brand)],
+                MODEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_model)],
+                YEAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_year)],
+                LICENSE_PLATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_license_plate)],
+                CATEGORY_ID: [CallbackQueryHandler(process_category, pattern="^cat_")],
+                ENGINE_CAPACITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_engine_capacity)],
+                HORSEPOWER: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_horsepower)],
+                FUEL_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_fuel_type)],
+                TRANSMISSION: [CallbackQueryHandler(process_transmission, pattern="^trans_")],
+                FUEL_CONSUMPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_fuel_consumption)],
+                DOORS: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_doors)],
+                SEATS: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_seats)],
+                COLOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_color)],
+                DAILY_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_daily_price)],
+                DEPOSIT: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_deposit)],
+                MILEAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_mileage)],
+                FEATURES: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_features)],
+                DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_description)],
+                PHOTOS: [
+                    MessageHandler(filters.PHOTO, process_photo),
+                    CommandHandler("done", process_done_photos)
+                ],
+                CONFIRM: [CallbackQueryHandler(process_confirmation, pattern="^confirm_")]
+            },
+            fallbacks=[CommandHandler("cancel", cancel)]
         )
-    else:
-        # Локально используем polling
-        print("💻 Режим: Local (Development)")
-        application.run_polling(allowed_updates=Update.ALL_TYPES)
+        
+        # Регистрируем все обработчики
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("status", admin_status))
+        application.add_handler(conv_handler)
+        application.add_handler(CommandHandler("list_cars", list_cars))
+        application.add_handler(CommandHandler("delete_car", delete_car))
+        application.add_handler(CommandHandler("edit_car", edit_car))
+        application.add_handler(CommandHandler("cancel", cancel))
+        
+        # Обработчик ошибок
+        application.add_error_handler(error_handler)
+        
+        print("🚀 Бот запущен (polling mode)...")
+        print("✅ Отправьте /start боту в Telegram")
+        
+        # Запускаем бота
+        application.run_polling(
+            drop_pending_updates=True,
+            allowed_updates=None
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка запуска бота: {e}")
+        print(f"❌ КРИТИЧЕСКАЯ ОШИБКА БОТА: {e}")
+        import traceback
+        print(traceback.format_exc())
+
+# ============== ДЛЯ ЛОКАЛЬНОГО ТЕСТИРОВАНИЯ ==============
 
 if __name__ == "__main__":
-    main()
+    print("🔧 Локальный запуск бота...")
+    start_bot()
