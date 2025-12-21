@@ -2,7 +2,9 @@
 telegram_bot.py - Полная админ-панель для AvtoRend
 Включает все функции управления автомобилями
 """
-
+import asyncio
+import threading
+import logging
 import os
 import logging
 from datetime import datetime
