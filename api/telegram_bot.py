@@ -161,10 +161,471 @@ async def admin_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(status_text, parse_mode='Markdown')
 
-# ========== ФУНКЦИИ ДОБАВЛЕНИЯ АВТОМОБИЛЯ ==========
-# (Здесь все функции process_brand, process_model и т.д. остаются БЕЗ ИЗМЕНЕНИЙ)
-# Убедитесь что все функции от @admin_only до process_confirmation 
-# скопированы сюда без изменений
+# ========== ДОБАВЛЕНИЕ АВТОМОБИЛЯ ==========
+@admin_only
+async def add_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Начать процесс добавления машины"""
+    user_id = update.effective_user.id
+    user_data_store[user_id] = {"photos": []}
+    
+    await update.message.reply_text(
+        "🚗 *Добавление нового автомобиля*\n\n"
+        "Введите марку автомобиля (например: Toyota):",
+        parse_mode='Markdown'
+    )
+    return BRAND
+
+async def process_brand(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка марки"""
+    user_id = update.effective_user.id
+    user_data_store[user_id]["brand"] = update.message.text
+    
+    await update.message.reply_text("Введите модель (например: Camry):")
+    return MODEL
+
+async def process_model(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка модели"""
+    user_id = update.effective_user.id
+    user_data_store[user_id]["model"] = update.message.text
+    
+    await update.message.reply_text("Введите год выпуска (например: 2023):")
+    return YEAR
+
+async def process_year(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка года"""
+    try:
+        year = int(update.message.text)
+        if year < 1900 or year > datetime.now().year + 1:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text("Пожалуйста, введите корректный год (например: 2023):")
+        return YEAR
+    
+    user_id = update.effective_user.id
+    user_data_store[user_id]["year"] = year
+    
+    await update.message.reply_text("Введите номерной знак (например: A123BC):")
+    return LICENSE_PLATE
+
+async def process_license_plate(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка номера"""
+    user_id = update.effective_user.id
+    user_data_store[user_id]["license_plate"] = update.message.text.upper()
+    
+    # Показываем доступные категории
+    try:
+        db = SessionLocal()
+        categories = db.query(Category).filter(Category.is_active == True).all()
+        db.close()
+        
+        if not categories:
+            await update.message.reply_text("❌ Нет доступных категорий.")
+            return ConversationHandler.END
+        
+        keyboard = []
+        for category in categories:
+            keyboard.append([InlineKeyboardButton(
+                f"{category.name} (ID: {category.id})", 
+                callback_data=f"cat_{category.id}"
+            )])
+        
+        await update.message.reply_text(
+            "📂 Выберите категорию автомобиля:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return CATEGORY_ID
+    except Exception as e:
+        logger.error(f"Ошибка при получении категорий: {e}")
+        await update.message.reply_text("❌ Ошибка при загрузке категорий.")
+        return ConversationHandler.END
+
+async def process_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка выбора категории"""
+    query = update.callback_query
+    await query.answer()
+    
+    category_id = int(query.data.split("_")[1])
+    user_id = query.from_user.id
+    user_data_store[user_id]["category_id"] = category_id
+    
+    try:
+        db = SessionLocal()
+        category = db.query(Category).filter(Category.id == category_id).first()
+        db.close()
+        
+        category_name = category.name if category else f"ID: {category_id}"
+        await query.edit_message_text(f"✅ Категория: {category_name}\n\nВведите объем двигателя в литрах (например: 2.0):")
+        return ENGINE_CAPACITY
+    except Exception as e:
+        await query.edit_message_text("❌ Ошибка при загрузке категории.")
+        return ConversationHandler.END
+
+async def process_engine_capacity(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка объема двигателя"""
+    try:
+        capacity = float(update.message.text.replace(",", "."))
+        if capacity <= 0:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text("Пожалуйста, введите корректный объем (например: 2.0):")
+        return ENGINE_CAPACITY
+    
+    user_id = update.effective_user.id
+    user_data_store[user_id]["engine_capacity"] = capacity
+    
+    await update.message.reply_text("Введите мощность в л.с. (например: 150):")
+    return HORSEPOWER
+
+async def process_horsepower(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка мощности"""
+    try:
+        hp = int(update.message.text)
+        if hp <= 0:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text("Пожалуйста, введите корректную мощность (например: 150):")
+        return HORSEPOWER
+    
+    user_id = update.effective_user.id
+    user_data_store[user_id]["horsepower"] = hp
+    
+    await update.message.reply_text("Введите тип топлива (бензин, дизель, электрокар, гибрид):")
+    return FUEL_TYPE
+
+async def process_fuel_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка типа топлива"""
+    user_id = update.effective_user.id
+    user_data_store[user_id]["fuel_type"] = update.message.text
+    
+    keyboard = [
+        [InlineKeyboardButton("Автомат", callback_data="trans_automatic")],
+        [InlineKeyboardButton("Механика", callback_data="trans_manual")],
+        [InlineKeyboardButton("Вариатор", callback_data="trans_cvt")],
+        [InlineKeyboardButton("Робот", callback_data="trans_semi_automatic")],
+    ]
+    
+    await update.message.reply_text(
+        "Выберите тип трансмиссии:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    return TRANSMISSION
+
+async def process_transmission(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка трансмиссии"""
+    query = update.callback_query
+    await query.answer()
+    
+    trans_map = {
+        "trans_automatic": TransmissionType.AUTOMATIC,
+        "trans_manual": TransmissionType.MANUAL,
+        "trans_cvt": TransmissionType.CVT,
+        "trans_semi_automatic": TransmissionType.SEMI_AUTOMATIC,
+    }
+    
+    user_id = query.from_user.id
+    user_data_store[user_id]["transmission"] = trans_map[query.data]
+    
+    await query.edit_message_text(f"✅ Трансмиссия: {trans_map[query.data].value}\n\nВведите расход топлива (л/100км, например: 8.5):")
+    return FUEL_CONSUMPTION
+
+async def process_fuel_consumption(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка расхода"""
+    try:
+        consumption = float(update.message.text.replace(",", "."))
+        if consumption <= 0:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text("Пожалуйста, введите корректный расход (например: 8.5):")
+        return FUEL_CONSUMPTION
+    
+    user_id = update.effective_user.id
+    user_data_store[user_id]["fuel_consumption"] = consumption
+    
+    await update.message.reply_text("Введите количество дверей (например: 4):")
+    return DOORS
+
+async def process_doors(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка количества дверей"""
+    try:
+        doors = int(update.message.text)
+        if doors <= 0:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text("Пожалуйста, введите корректное количество дверей (например: 4):")
+        return DOORS
+    
+    user_id = update.effective_user.id
+    user_data_store[user_id]["doors"] = doors
+    
+    await update.message.reply_text("Введите количество мест (например: 5):")
+    return SEATS
+
+async def process_seats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка количества мест"""
+    try:
+        seats = int(update.message.text)
+        if seats <= 0:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text("Пожалуйста, введите корректное количество мест (например: 5):")
+        return SEATS
+    
+    user_id = update.effective_user.id
+    user_data_store[user_id]["seats"] = seats
+    
+    await update.message.reply_text("Введите цвет автомобиля (например: Черный):")
+    return COLOR
+
+async def process_color(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка цвета"""
+    user_id = update.effective_user.id
+    user_data_store[user_id]["color"] = update.message.text
+    
+    await update.message.reply_text("Введите цену за день (например: 2500):")
+    return DAILY_PRICE
+
+async def process_daily_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка цены"""
+    try:
+        price = float(update.message.text.replace(",", "."))
+        if price <= 0:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text("Пожалуйста, введите корректную цену (например: 2500):")
+        return DAILY_PRICE
+    
+    user_id = update.effective_user.id
+    user_data_store[user_id]["daily_price"] = price
+    
+    await update.message.reply_text("Введите сумму залога (например: 10000):")
+    return DEPOSIT
+
+async def process_deposit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка залога"""
+    try:
+        deposit = float(update.message.text.replace(",", "."))
+        if deposit < 0:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text("Пожалуйста, введите корректную сумму залога (например: 10000):")
+        return DEPOSIT
+    
+    user_id = update.effective_user.id
+    user_data_store[user_id]["deposit"] = deposit
+    
+    await update.message.reply_text("Введите текущий пробег в км (например: 15000):")
+    return MILEAGE
+
+async def process_mileage(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка пробега"""
+    try:
+        mileage = int(update.message.text)
+        if mileage < 0:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text("Пожалуйста, введите корректный пробег (например: 15000):")
+        return MILEAGE
+    
+    user_id = update.effective_user.id
+    user_data_store[user_id]["mileage"] = mileage
+    
+    await update.message.reply_text(
+        "Введите опции через запятую (например: кондиционер, подогрев сидений):\n"
+        "Или отправьте 'нет', если опций нет:"
+    )
+    return FEATURES
+
+async def process_features(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка опций"""
+    user_id = update.effective_user.id
+    text = update.message.text.strip()
+    
+    if text.lower() == 'нет':
+        features = []
+    else:
+        features = [f.strip() for f in text.split(",")]
+    
+    user_data_store[user_id]["features"] = features
+    
+    await update.message.reply_text("Введите описание автомобиля (или отправьте 'нет' для пропуска):")
+    return DESCRIPTION
+
+async def process_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка описания"""
+    user_id = update.effective_user.id
+    text = update.message.text.strip()
+    
+    if text.lower() == 'нет':
+        description = None
+    else:
+        description = text
+    
+    user_data_store[user_id]["description"] = description
+    
+    await update.message.reply_text(
+        "📸 Отправьте фотографии автомобиля (можно несколько).\n"
+        "После загрузки всех фото отправьте команду /done\n"
+        "Минимум 1 фото рекомендуется."
+    )
+    return PHOTOS
+
+async def process_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка загрузки фото"""
+    user_id = update.effective_user.id
+    
+    if "photos" not in user_data_store[user_id]:
+        user_data_store[user_id]["photos"] = []
+    
+    try:
+        photo_file = await update.message.photo[-1].get_file()
+        
+        # Генерируем уникальное имя файла
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"car_{timestamp}_{len(user_data_store[user_id]['photos'])}.jpg"
+        filepath = UPLOAD_DIR / filename
+        
+        # Сохраняем фото
+        await photo_file.download_to_drive(filepath)
+        
+        # Оптимизируем изображение
+        try:
+            img = Image.open(filepath)
+            if img.height > 1080 or img.width > 1920:
+                img.thumbnail((1920, 1080))
+                img.save(filepath, "JPEG", quality=85)
+        except Exception as e:
+            logger.error(f"Ошибка оптимизации изображения: {e}")
+        
+        # Сохраняем web-путь
+        web_path = f"/static/uploads/cars/{filename}"
+        user_data_store[user_id]["photos"].append(web_path)
+        
+        await update.message.reply_text(f"✅ Фото сохранено! Загружено фото: {len(user_data_store[user_id]['photos'])}\nОтправьте еще фото или /done для продолжения")
+        return PHOTOS
+    except Exception as e:
+        logger.error(f"Ошибка загрузки фото: {e}")
+        await update.message.reply_text("❌ Ошибка при загрузке фото. Попробуйте еще раз.")
+        return PHOTOS
+
+async def process_done_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Завершение загрузки фото"""
+    user_id = update.effective_user.id
+    
+    if not user_data_store[user_id].get("photos"):
+        await update.message.reply_text("Вы не загрузили ни одного фото. Пожалуйста, загрузите хотя бы одно фото:")
+        return PHOTOS
+    
+    # Подтверждение данных
+    data = user_data_store[user_id]
+    
+    summary = (
+        f"📋 *Проверьте данные автомобиля:*\n\n"
+        f"🚗 {data['brand']} {data['model']} ({data['year']})\n"
+        f"📌 Номер: {data['license_plate']}\n"
+        f"📂 Категория ID: {data['category_id']}\n"
+        f"⚙️ Двигатель: {data['engine_capacity']}л, {data['horsepower']}л.с.\n"
+        f"⛽ Топливо: {data['fuel_type']}, расход: {data['fuel_consumption']}л/100км\n"
+        f"🔄 Трансмиссия: {data['transmission'].value}\n"
+        f"🚪 Дверей: {data['doors']}, Мест: {data['seats']}\n"
+        f"🎨 Цвет: {data['color']}\n"
+        f"💰 Цена/день: {data['daily_price']} руб.\n"
+        f"💵 Залог: {data['deposit']} руб.\n"
+        f"📏 Пробег: {data['mileage']} км\n"
+        f"📸 Фото: {len(data['photos'])} шт.\n"
+    )
+    
+    if data.get('features'):
+        summary += f"🎯 Опции: {', '.join(data['features'])}\n"
+    
+    if data.get('description'):
+        summary += f"📝 Описание: {data['description'][:100]}...\n"
+    
+    keyboard = [
+        [InlineKeyboardButton("✅ Сохранить", callback_data="confirm_save")],
+        [InlineKeyboardButton("❌ Отменить", callback_data="confirm_cancel")]
+    ]
+    
+    await update.message.reply_text(
+        summary,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    return CONFIRM
+
+async def process_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка подтверждения"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    data = user_data_store[user_id]
+    
+    if query.data == "confirm_cancel":
+        await query.edit_message_text("❌ Добавление автомобиля отменено.")
+        user_data_store.pop(user_id, None)
+        return ConversationHandler.END
+    
+    # Сохранение в БД
+    try:
+        db = SessionLocal()
+        
+        car_data = {
+            "brand": data["brand"],
+            "model": data["model"],
+            "year": data["year"],
+            "license_plate": data["license_plate"],
+            "category_id": data["category_id"],
+            "engine_capacity": data["engine_capacity"],
+            "horsepower": data["horsepower"],
+            "fuel_type": data["fuel_type"],
+            "transmission": data["transmission"],
+            "fuel_consumption": data["fuel_consumption"],
+            "doors": data["doors"],
+            "seats": data["seats"],
+            "color": data["color"],
+            "daily_price": data["daily_price"],
+            "deposit": data["deposit"],
+            "mileage": data["mileage"],
+            "features": data.get("features", []),
+            "images": data.get("photos", []),
+            "thumbnail": data.get("photos", [""])[0] if data.get("photos") else None,
+            "description": data.get("description"),
+            "status": CarStatus.AVAILABLE,
+            "is_active": True
+        }
+        
+        # Используем Pydantic схему для валидации
+        car_schema = CarCreate(**car_data)
+        
+        # Создаем объект Car
+        db_car = Car(**car_schema.model_dump())
+        db.add(db_car)
+        db.commit()
+        db.refresh(db_car)
+        
+        # Получаем категорию для отображения
+        category = db.query(Category).filter(Category.id == db_car.category_id).first()
+        db.close()
+        
+        # Отправляем подтверждение
+        await query.edit_message_text(
+            f"✅ *Автомобиль успешно добавлен!*\n\n"
+            f"🆔 ID: {db_car.id}\n"
+            f"🚗 Марка: {db_car.brand} {db_car.model}\n"
+            f"📂 Категория: {category.name if category else 'Неизвестно'}\n"
+            f"📌 Номер: {db_car.license_plate}\n"
+            f"💰 Цена: {db_car.daily_price} руб./день",
+            parse_mode='Markdown'
+        )
+        
+        # Очищаем временные данные
+        user_data_store.pop(user_id, None)
+        
+    except Exception as e:
+        logger.error(f"Ошибка сохранения автомобиля: {e}")
+        await query.edit_message_text(f"❌ Ошибка при сохранении: {str(e)}")
+    
+    return ConversationHandler.END
 
 # ========== СПИСОК АВТОМОБИЛЕЙ ==========
 @admin_only
@@ -392,7 +853,7 @@ def start_bot():
                 HORSEPOWER: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_horsepower)],
                 FUEL_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_fuel_type)],
                 TRANSMISSION: [CallbackQueryHandler(process_transmission, pattern="^trans_")],
-                FUEL_CONSUMPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_fuel_consumption)],
+                FUEL_CONSUMPТION: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_fuel_consumption)],
                 DOORS: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_doors)],
                 SEATS: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_seats)],
                 COLOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_color)],
