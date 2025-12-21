@@ -853,7 +853,7 @@ def start_bot():
                 HORSEPOWER: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_horsepower)],
                 FUEL_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_fuel_type)],
                 TRANSMISSION: [CallbackQueryHandler(process_transmission, pattern="^trans_")],
-                FUEL_CONSUMPТION: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_fuel_consumption)],
+                FUEL_CONSUMPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_fuel_consumption)],
                 DOORS: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_doors)],
                 SEATS: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_seats)],
                 COLOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_color)],
