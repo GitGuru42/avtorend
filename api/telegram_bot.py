@@ -1,6 +1,6 @@
 """
-telegram_bot.py - Telegram бот для AvtoRend (отдельный сервис)
-Полная админ-панель с управлением автомобилями
+telegram_bot.py - Telegram бот для AvtoRend (продакшен версия)
+Только Cloudinary хранилище, без локального сохранения
 """
 
 import os
@@ -8,7 +8,6 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from PIL import Image
 
 # ========== НАСТРОЙКА ПУТЕЙ ==========
 current_dir = Path(__file__).parent.parent
@@ -22,7 +21,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 print("=" * 60)
-print("🤖 TELEGRAM BOT - AvtoRend Админ Панель")
+print("🤖 TELEGRAM BOT - AvtoRend Админ Панель (PRODUCTION)")
 print("=" * 60)
 
 # ========== ЗАГРУЗКА ПЕРЕМЕННЫХ ОКРУЖЕНИЯ ==========
@@ -33,6 +32,22 @@ try:
 except ImportError:
     print("⚠️  python-dotenv не установлен, используем системные переменные")
 
+# ========== ПРОВЕРКА КЛЮЧЕЙ CLOUDINARY (ОБЯЗАТЕЛЬНО) ==========
+CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME")
+CLOUDINARY_API_KEY = os.getenv("CLOUDINARY_API_KEY")
+CLOUDINARY_API_SECRET = os.getenv("CLOUDINARY_API_SECRET")
+
+if not all([CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET]):
+    print("❌ ОШИБКА: Cloudinary ключи не настроены!")
+    print("ℹ️  Настройте в Environment Variables на Render:")
+    print("    CLOUDINARY_CLOUD_NAME")
+    print("    CLOUDINARY_API_KEY")
+    print("    CLOUDINARY_API_SECRET")
+    sys.exit(1)
+
+print(f"☁️  Cloudinary: {CLOUDINARY_CLOUD_NAME}")
+print(f"🔑 API Key: {CLOUDINARY_API_KEY[:8]}...")
+
 # ========== КОНФИГУРАЦИЯ ==========
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 ADMIN_IDS = list(map(int, os.getenv("TELEGRAM_ADMIN_IDS", "").split(","))) if os.getenv("TELEGRAM_ADMIN_IDS") else []
@@ -40,38 +55,44 @@ ADMIN_IDS = list(map(int, os.getenv("TELEGRAM_ADMIN_IDS", "").split(","))) if os
 if not TOKEN:
     logger.error("❌ TELEGRAM_BOT_TOKEN не найден!")
     print("❌ ОШИБКА: TELEGRAM_BOT_TOKEN не установлен!")
-    print("ℹ️  Добавьте TELEGRAM_BOT_TOKEN в Environment Variables на Render")
     sys.exit(1)
 
 print(f"🔐 Токен: {TOKEN[:15]}...")
 print(f"👑 Админов: {len(ADMIN_IDS) if ADMIN_IDS else 'не настроено'}")
 
-# ========== ПУТЬ ДЛЯ ЗАГРУЗКИ ИЗОБРАЖЕНИЙ ==========
-if os.getenv("RENDER"):
-    UPLOAD_DIR = Path("/opt/render/project/src/static/uploads/cars")
-else:
-    UPLOAD_DIR = Path("static/uploads/cars")
-
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-print(f"📁 Директория для фото: {UPLOAD_DIR}")
+# ========== ИНИЦИАЛИЗАЦИЯ CLOUDINARY ==========
+try:
+    import cloudinary
+    import cloudinary.uploader
+    import cloudinary.api
+    
+    cloudinary.config(
+        cloud_name=CLOUDINARY_CLOUD_NAME,
+        api_key=CLOUDINARY_API_KEY,
+        api_secret=CLOUDINARY_API_SECRET,
+        secure=True
+    )
+    
+    # Проверяем подключение к Cloudinary
+    cloudinary.api.ping()
+    print("✅ Cloudinary подключен и работает")
+    
+except ImportError:
+    print("❌ Cloudinary не установлен. Установите: pip install cloudinary")
+    sys.exit(1)
+except Exception as e:
+    print(f"❌ Ошибка подключения к Cloudinary: {e}")
+    sys.exit(1)
 
 # ========== ИМПОРТЫ БАЗЫ ДАННЫХ ==========
 try:
     from api.models import Car, Category, CarStatus, TransmissionType
     from api.database import SessionLocal
     from api.schemas import CarCreate
-    print("✅ Модули БД импортированы из api.*")
+    print("✅ Модули БД импортированы")
 except ImportError as e:
-    print(f"⚠️  Ошибка импорта БД: {e}")
-    print("Попытка альтернативного импорта...")
-    try:
-        from models import Car, Category, CarStatus, TransmissionType
-        from database import SessionLocal
-        from schemas import CarCreate
-        print("✅ Модули БД импортированы из корневой директории")
-    except ImportError as e2:
-        print(f"❌ Критическая ошибка импорта БД: {e2}")
-        sys.exit(1)
+    print(f"❌ Ошибка импорта БД: {e}")
+    sys.exit(1)
 
 # ========== ИМПОРТЫ TELEGRAM ==========
 try:
@@ -128,6 +149,8 @@ async def debug(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📛 Username: @{username}\n"
         f"📋 ADMIN_IDS: `{ADMIN_IDS}`\n"
         f"🔍 В списке админов: **{'✅ ДА' if user_id in ADMIN_IDS else '❌ НЕТ'}**\n\n"
+        f"☁️  Cloudinary: {CLOUDINARY_CLOUD_NAME}\n"
+        f"📦 Хранилище: **ТОЛЬКО CLOUDINARY**\n\n"
         f"📋 *Тестируйте команды:*\n"
         f"• `/list_cars` - список авто\n"
         f"• `/add_car` - добавить авто\n"
@@ -139,7 +162,7 @@ async def debug(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /start - панель администратора"""
     await update.message.reply_text(
-        "🚗 *Админ-панель AvtoRend*\n\n"
+        "🚗 *Админ-панель AvtoRend (PRODUCTION)*\n\n"
         "📋 *Доступные команды:*\n"
         "`/add_car` - Добавить новую машину\n"
         "`/list_cars` - Показать все машины\n"
@@ -148,6 +171,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "`/status` - Статус системы\n"
         "`/debug` - Отладка\n"
         "`/cancel` - Отменить операцию\n\n"
+        "☁️  *Хранилище фото:* Cloudinary\n\n"
         "🔧 *Примеры:*\n"
         "`/delete_car 1`\n"
         "`/edit_car 1 daily_price 3000`",
@@ -169,12 +193,13 @@ async def admin_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         categories_count = "неизвестно"
     
     status_text = (
-        f"📊 *Статус системы*\n\n"
+        f"📊 *Статус системы (PRODUCTION)*\n\n"
         f"🤖 Бот: ✅ Работает\n"
         f"🗄️  База данных: {db_status}\n"
         f"🚗 Автомобилей: {cars_count}\n"
         f"📂 Категорий: {categories_count}\n"
         f"👑 Админов: {len(ADMIN_IDS)}\n"
+        f"☁️  Хранилище фото: **Cloudinary**\n"
         f"🌐 Хостинг: {'Render' if os.getenv('RENDER') else 'Локальный'}\n\n"
         f"🟢 Система функционирует нормально"
     )
@@ -188,7 +213,7 @@ async def add_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data_store[user_id] = {"photos": []}
     
     await update.message.reply_text(
-        "🚗 *Добавление нового автомобиля*\n\n"
+        "🚗 *Добавление нового автомобиля (Cloudinary)*\n\n"
         "Введите марку автомобиля (например: Toyota):",
         parse_mode='Markdown'
     )
@@ -482,47 +507,113 @@ async def process_description(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_data_store[user_id]["description"] = description
     
     await update.message.reply_text(
-        "📸 Отправьте фотографии автомобиля (можно несколько).\n"
+        "📸 *Отправьте фотографии автомобиля (можно несколько).*\n"
         "После загрузки всех фото отправьте команду /done\n"
-        "Минимум 1 фото рекомендуется."
+        "Минимум 1 фото рекомендуется.\n\n"
+        "☁️  *Фото будут сохранены в Cloudinary*",
+        parse_mode='Markdown'
     )
     return PHOTOS
 
 async def process_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка загрузки фото"""
+    """Обработка загрузки фото - ТОЛЬКО Cloudinary"""
     user_id = update.effective_user.id
     
-    if "photos" not in user_data_store[user_id]:
-        user_data_store[user_id]["photos"] = []
+    if "photos" not in user_data_store.get(user_id, {}):
+        user_data_store[user_id] = {"photos": []}
     
     try:
         photo_file = await update.message.photo[-1].get_file()
         
-        # Генерируем уникальное имя файла
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"car_{timestamp}_{len(user_data_store[user_id]['photos'])}.jpg"
-        filepath = UPLOAD_DIR / filename
+        # Создаем временный файл
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        temp_filename = f"temp_{user_id}_{timestamp}.jpg"
         
-        # Сохраняем фото
-        await photo_file.download_to_drive(filepath)
+        # Создаем временную директорию
+        temp_dir = Path("temp_uploads")
+        temp_dir.mkdir(exist_ok=True)
+        temp_path = temp_dir / temp_filename
         
-        # Оптимизируем изображение
+        # Скачиваем фото
+        await photo_file.download_to_drive(temp_path)
+        
+        # Получаем car_id
+        car_id = user_data_store[user_id].get("temp_car_id", 0)
+        if car_id == 0:
+            # Генерируем временный ID
+            car_id = int(datetime.now().timestamp()) % 1000000
+            user_data_store[user_id]["temp_car_id"] = car_id
+        
+        photo_index = len(user_data_store[user_id]['photos'])
+        
+        # ========== ЗАГРУЗКА В CLOUDINARY ==========
         try:
-            img = Image.open(filepath)
-            if img.height > 1080 or img.width > 1920:
-                img.thumbnail((1920, 1080))
-                img.save(filepath, "JPEG", quality=85)
-        except Exception as e:
-            logger.error(f"Ошибка оптимизации изображения: {e}")
-        
-        # Сохраняем web-путь
-        web_path = f"/static/uploads/cars/{filename}"
-        user_data_store[user_id]["photos"].append(web_path)
-        
-        await update.message.reply_text(f"✅ Фото сохранено! Загружено фото: {len(user_data_store[user_id]['photos'])}\nОтправьте еще фото или /done для продолжения")
-        return PHOTOS
+            # Создаем уникальный public_id
+            public_id = f"avtorend/car_{car_id}/photo_{timestamp}_{photo_index}"
+            
+            # Загружаем в Cloudinary
+            result = cloudinary.uploader.upload(
+                str(temp_path),
+                public_id=public_id,
+                folder=f"avtorend/car_{car_id}",
+                overwrite=False,
+                resource_type="image",
+                transformation=[
+                    {"width": 1200, "height": 800, "crop": "limit", "quality": "auto"},
+                    {"fetch_format": "auto"}
+                ]
+            )
+            
+            # Оптимизированный URL для веба
+            optimized_url = cloudinary.CloudinaryImage(public_id).build_url(
+                width=800,
+                height=600,
+                crop="fill",
+                gravity="auto",
+                quality="auto",
+                fetch_format="webp"
+            )
+            
+            # Сохраняем URL
+            user_data_store[user_id]["photos"].append(optimized_url)
+            
+            # Удаляем временный файл
+            if temp_path.exists():
+                temp_path.unlink()
+            
+            await update.message.reply_text(
+                f"✅ Фото загружено в Cloudinary!\n"
+                f"📸 Загружено фото: {len(user_data_store[user_id]['photos'])}\n"
+                f"🔗 URL: {optimized_url[:50]}...\n\n"
+                f"Отправьте еще фото или /done для продолжения"
+            )
+            
+            # Очищаем временную директорию если пуста
+            try:
+                if temp_dir.exists() and not any(temp_dir.iterdir()):
+                    temp_dir.rmdir()
+            except:
+                pass
+                
+            return PHOTOS
+            
+        except Exception as cloudinary_error:
+            logger.error(f"Ошибка Cloudinary: {cloudinary_error}")
+            # Удаляем временный файл
+            if temp_path.exists():
+                temp_path.unlink()
+            
+            await update.message.reply_text(
+                "❌ Ошибка загрузки в Cloudinary. Проверьте:\n"
+                "1. Ключи Cloudinary в настройках\n"
+                "2. Интернет соединение\n"
+                "3. Размер файла (макс. 10MB)\n\n"
+                "Попробуйте отправить фото еще раз."
+            )
+            return PHOTOS
+            
     except Exception as e:
-        logger.error(f"Ошибка загрузки фото: {e}")
+        logger.error(f"Общая ошибка загрузки фото: {e}")
         await update.message.reply_text("❌ Ошибка при загрузке фото. Попробуйте еще раз.")
         return PHOTOS
 
@@ -531,7 +622,10 @@ async def process_done_photos(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = update.effective_user.id
     
     if not user_data_store[user_id].get("photos"):
-        await update.message.reply_text("Вы не загрузили ни одного фото. Пожалуйста, загрузите хотя бы одно фото:")
+        await update.message.reply_text(
+            "❌ Вы не загрузили ни одного фото!\n"
+            "Пожалуйста, загрузите хотя бы одно фото:"
+        )
         return PHOTOS
     
     # Подтверждение данных
@@ -550,7 +644,7 @@ async def process_done_photos(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"💰 Цена/день: {data['daily_price']} руб.\n"
         f"💵 Залог: {data['deposit']} руб.\n"
         f"📏 Пробег: {data['mileage']} км\n"
-        f"📸 Фото: {len(data['photos'])} шт.\n"
+        f"📸 Фото в Cloudinary: {len(data['photos'])} шт.\n"
     )
     
     if data.get('features'):
@@ -560,7 +654,7 @@ async def process_done_photos(update: Update, context: ContextTypes.DEFAULT_TYPE
         summary += f"📝 Описание: {data['description'][:100]}...\n"
     
     keyboard = [
-        [InlineKeyboardButton("✅ Сохранить", callback_data="confirm_save")],
+        [InlineKeyboardButton("✅ Сохранить в БД", callback_data="confirm_save")],
         [InlineKeyboardButton("❌ Отменить", callback_data="confirm_cancel")]
     ]
     
@@ -606,7 +700,7 @@ async def process_confirmation(update: Update, context: ContextTypes.DEFAULT_TYP
             "deposit": data["deposit"],
             "mileage": data["mileage"],
             "features": data.get("features", []),
-            "images": data.get("photos", []),
+            "images": data.get("photos", []),  # Cloudinary URLs
             "thumbnail": data.get("photos", [""])[0] if data.get("photos") else None,
             "description": data.get("description"),
             "status": CarStatus.AVAILABLE,
@@ -633,7 +727,9 @@ async def process_confirmation(update: Update, context: ContextTypes.DEFAULT_TYP
             f"🚗 Марка: {db_car.brand} {db_car.model}\n"
             f"📂 Категория: {category.name if category else 'Неизвестно'}\n"
             f"📌 Номер: {db_car.license_plate}\n"
-            f"💰 Цена: {db_car.daily_price} руб./день",
+            f"💰 Цена: {db_car.daily_price} руб./день\n"
+            f"📸 Фото: {len(db_car.images)} шт. в Cloudinary\n\n"
+            f"☁️  Фото доступны по URL Cloudinary",
             parse_mode='Markdown'
         )
         
@@ -642,7 +738,12 @@ async def process_confirmation(update: Update, context: ContextTypes.DEFAULT_TYP
         
     except Exception as e:
         logger.error(f"Ошибка сохранения автомобиля: {e}")
-        await query.edit_message_text(f"❌ Ошибка при сохранении: {str(e)}")
+        await query.edit_message_text(
+            f"❌ Ошибка при сохранении в БД:\n\n"
+            f"```{str(e)[:200]}```\n\n"
+            f"Данные фото уже загружены в Cloudinary.",
+            parse_mode='Markdown'
+        )
     
     return ConversationHandler.END
 
@@ -674,7 +775,7 @@ async def list_cars(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"   {car.brand} {car.model} ({car.year})\n"
                 f"   Номер: {car.license_plate}\n"
                 f"   Цена: {car.daily_price} руб./день\n"
-                f"   Статус: {car.status.value}\n\n"
+                f"   Фото: {len(car.images)} шт. (Cloudinary)\n\n"
             )
         
         if len(cars) > 10:
@@ -689,7 +790,7 @@ async def list_cars(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ========== УДАЛЕНИЕ АВТОМОБИЛЯ ==========
 async def delete_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Удалить машину по ID"""
+    """Удалить машину по ID и фото из Cloudinary"""
     if not context.args:
         await update.message.reply_text("Используйте: /delete_car <ID автомобиля>\nПример: `/delete_car 1`", parse_mode='Markdown')
         return
@@ -709,19 +810,33 @@ async def delete_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"❌ Автомобиль с ID {car_id} не найден")
             return
         
-        # Удаляем файлы изображений
-        for image_path in car.images:
-            try:
-                if image_path.startswith('/static/'):
-                    local_path = image_path[8:]  # Убираем '/static/'
-                    file_path = Path("static") / local_path
-                
-                if file_path.exists():
-                    file_path.unlink()
-                    logger.info(f"Удален файл: {file_path}")
-            except Exception as e:
-                logger.error(f"Ошибка удаления изображения {image_path}: {e}")
+        # Удаляем фото из Cloudinary
+        deleted_count = 0
+        for image_url in car.images:
+            if "res.cloudinary.com" in image_url:
+                try:
+                    # Извлекаем public_id из URL
+                    parts = image_url.split('/')
+                    public_id_with_ext = parts[-1]
+                    public_id = public_id_with_ext.split('.')[0]
+                    
+                    # Добавляем путь папки если есть
+                    if len(parts) > 8:
+                        folder = parts[-2]
+                        public_id = f"{folder}/{public_id}"
+                    
+                    # Удаляем из Cloudinary
+                    result = cloudinary.uploader.destroy(public_id)
+                    if result.get('result') == 'ok':
+                        deleted_count += 1
+                        logger.info(f"Удалено из Cloudinary: {public_id}")
+                    else:
+                        logger.warning(f"Не удалось удалить из Cloudinary: {public_id}")
+                        
+                except Exception as e:
+                    logger.error(f"Ошибка удаления фото из Cloudinary: {e}")
         
+        # Удаляем запись из БД
         db.delete(car)
         db.commit()
         db.close()
@@ -730,7 +845,8 @@ async def delete_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"✅ *Автомобиль удален*\n\n"
             f"🚗 {car.brand} {car.model}\n"
             f"🆔 ID: {car.id}\n"
-            f"📌 Номер: {car.license_plate}",
+            f"📌 Номер: {car.license_plate}\n"
+            f"📸 Удалено фото из Cloudinary: {deleted_count}/{len(car.images)}",
             parse_mode='Markdown'
         )
     except Exception as e:
@@ -850,7 +966,10 @@ def start_bot():
     """Запуск бота - вызывается из bot_runner.py"""
     
     print("\n" + "=" * 60)
-    print("🚀 ЗАПУСК ТЕЛЕГРАМ БОТА...")
+    print("🚀 ЗАПУСК ТЕЛЕГРАМ БОТА (PRODUCTION)")
+    print("=" * 60)
+    print(f"☁️  Cloudinary: {CLOUDINARY_CLOUD_NAME}")
+    print(f"🔐 Хранилище: ТОЛЬКО CLOUDINARY")
     print("=" * 60)
     
     try:
@@ -932,5 +1051,5 @@ def start_bot():
 
 # ========== ТОЧКА ВХОДА ==========
 if __name__ == "__main__":
-    print("🔧 Прямой запуск бота...")
+    print("🔧 Прямой запуск бота (production)...")
     start_bot()
