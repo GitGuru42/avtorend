@@ -133,7 +133,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-@admin_only
+
 async def admin_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Статус системы для администратора"""
     try:
@@ -162,7 +162,7 @@ async def admin_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(status_text, parse_mode='Markdown')
 
 # ========== ДОБАВЛЕНИЕ АВТОМОБИЛЯ ==========
-@admin_only
+
 async def add_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Начать процесс добавления машины"""
     user_id = update.effective_user.id
@@ -628,7 +628,7 @@ async def process_confirmation(update: Update, context: ContextTypes.DEFAULT_TYP
     return ConversationHandler.END
 
 # ========== СПИСОК АВТОМОБИЛЕЙ ==========
-@admin_only
+
 async def list_cars(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать список всех машин"""
     try:
@@ -670,7 +670,7 @@ async def list_cars(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Ошибка при загрузке списка автомобилей.")
 
 # ========== УДАЛЕНИЕ АВТОМОБИЛЯ ==========
-@admin_only
+
 async def delete_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Удалить машину по ID"""
     if not context.args:
@@ -721,7 +721,7 @@ async def delete_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Ошибка при удалении автомобиля: {e}")
 
 # ========== РЕДАКТИРОВАНИЕ АВТОМОБИЛЯ ==========
-@admin_only
+
 async def edit_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Редактировать машину по ID"""
     if not context.args:
