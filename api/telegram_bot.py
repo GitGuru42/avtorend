@@ -573,7 +573,43 @@ async def process_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 quality="auto",
                 fetch_format="webp"
             )
+            # Загружаем в Cloudinary
+            result = cloudinary.uploader.upload(
+                str(temp_path),
+                public_id=public_id,
+                folder=f"avtorend/car_{car_id}",
+                overwrite=False,
+                resource_type="image",
+                transformation=[
+                    {"width": 1200, "height": 800, "crop": "limit", "quality": "auto"},
+                    {"fetch_format": "auto"}
+                ]
+            )
             
+            # ✅ ДОБАВЬТЕ ОТЛАДОЧНУЮ ПЕЧАТЬ ЗДЕСЬ:
+            print("=" * 60)
+            print("🔍 Cloudinary Upload Debug Info:")
+            print(f"   Cloud Name из конфига: {CLOUDINARY_CLOUD_NAME}")
+            print(f"   Cloud Name в cloudinary.config: {cloudinary.config().cloud_name}")
+            print(f"   Public ID: {public_id}")
+            print(f"   Upload Result: {result}")
+            print(f"   Secure URL из result: {result.get('secure_url')}")
+            print("=" * 60)
+            
+            # Оптимизированный URL для веба
+            optimized_url = cloudinary.CloudinaryImage(public_id).build_url(
+                width=800,
+                height=600,
+                crop="fill",
+                gravity="auto",
+                quality="auto",
+                fetch_format="webp"
+            )
+
+# ✅ ДОБАВЬТЕ ЕЩЕ ПЕЧАТЬ:
+print(f"✅ Optimized URL: {optimized_url}")
+print(f"   Contains 'demo'? {'YES ⚠️' if 'demo' in optimized_url else 'NO ✅'}")
+print(f"   Contains '{CLOUDINARY_CLOUD_NAME}'? {'YES ✅' if CLOUDINARY_CLOUD_NAME in optimized_url else 'NO ❌'}")
             # Сохраняем URL
             user_data_store[user_id]["photos"].append(optimized_url)
             
