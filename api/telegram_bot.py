@@ -117,7 +117,7 @@ def admin_only(func):
     return wrapper
 
 # ========== ОСНОВНЫЕ КОМАНДЫ ==========
-@admin_only
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /start - панель администратора"""
     await update.message.reply_text(
