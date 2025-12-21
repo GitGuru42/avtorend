@@ -147,12 +147,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "`/delete_car <id>` - Удалить машину\n"
         "`/status` - Статус системы\n"
         "`/debug` - Отладка\n"
-        `/cancel` - Отменить операцию\n\n"
+        "`/cancel` - Отменить операцию\n\n"
         "🔧 *Примеры:*\n"
         "`/delete_car 1`\n"
         "`/edit_car 1 daily_price 3000`",
-        parse_mode='Markdown')
-    
+        parse_mode='Markdown'
+    )
 
 async def admin_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Статус системы для администратора"""
