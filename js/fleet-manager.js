@@ -1,4 +1,4 @@
-// js/fleet-manager.js - Управление отображением автопарка (Адаптированная версия)
+// js/fleet-manager.js - Управление отображением автопарка (Cloudinary версия)
 class FleetManager {
     constructor() {
         this.carsGrid = document.getElementById('carsGrid');
@@ -12,7 +12,7 @@ class FleetManager {
     }
 
     async init() {
-        console.log('🚗 Инициализация FleetManager...');
+        console.log('🚗 Инициализация FleetManager (Cloudinary)...');
         
         // Запускаем загрузку сразу
         this.startLoading();
@@ -34,7 +34,7 @@ class FleetManager {
             // Настраиваем события
             this.setupEvents();
             
-            console.log('✅ FleetManager инициализирован');
+            console.log('✅ FleetManager инициализирован (Cloudinary)');
             
         } catch (error) {
             console.error('❌ Ошибка инициализации FleetManager:', error);
@@ -82,19 +82,27 @@ class FleetManager {
                 this.cars = await window.carAPI.getCars(apiFilters);
                 console.log('🚗 Загружены автомобили из API:', this.cars.length);
                 
-                // ✅ ВАЖНО: Проверяем данные
+                // ✅ ВАЖНО: Проверяем данные для Cloudinary
                 if (this.cars.length > 0) {
-                    console.log('📸 Пример фото из API:');
+                    console.log('☁️ Cloudinary данные автомобиля:');
                     console.log('   Изображения:', this.cars[0].images);
                     console.log('   Thumbnail:', this.cars[0].thumbnail);
-                    console.log('   Прямой URL первого фото:', this.getCorrectImageUrl(this.cars[0].images?.[0]));
+                    console.log('   Обработанный URL:', this.getCorrectImageUrl(this.cars[0].images?.[0]));
+                    
+                    // Логируем все типы URL для отладки
+                    this.cars.forEach(car => {
+                        if (car.images && car.images.length > 0) {
+                            const firstImage = car.images[0];
+                            console.log(`   ${car.brand} ${car.model}: ${firstImage} -> ${this.getCorrectImageUrl(firstImage)}`);
+                        }
+                    });
                 }
                 
             } else {
-                // Используем демо данные с фото из бота
+                // Используем демо данные с Cloudinary фото
                 await new Promise(resolve => setTimeout(resolve, 1000));
-                this.cars = this.getCarsFromBotDatabase();
-                console.log('🚗 Используем данные из БД бота:', this.cars.length);
+                this.cars = this.getCloudinaryDemoCars();
+                console.log('🚗 Используем Cloudinary демо данные:', this.cars.length);
             }
             
             // Отрисовываем автомобили
@@ -112,7 +120,7 @@ class FleetManager {
         }
     }
 
-    // ✅ ИЗМЕНЕНО: Правильный метод получения фото
+    // ✅ Cloudinary версия: Получение фото автомобиля
     getCarImage(car) {
         if (!car) return this.getRandomCarImage();
         
@@ -136,52 +144,120 @@ class FleetManager {
         return this.getRandomCarImage();
     }
     
-    // ✅ НОВЫЙ МЕТОД: Получение правильного URL для фото
-    // В fleet-manager.js измени метод getCorrectImageUrl:
+    // ✅ ОСНОВНОЙ МЕТОД: Получение правильного URL для фото (Cloudinary оптимизированный)
     getCorrectImageUrl(imagePath) {
+        // === DEBUG ===
+        console.log('=== DEBUG getCorrectImageUrl ===');
+        console.log('Input:', imagePath);
+        console.log('Type:', typeof imagePath);
+        
         if (!imagePath || typeof imagePath !== 'string') {
+            console.log('⚠️ Пустой или неверный imagePath, возвращаем placeholder');
             return this.getDefaultCarImage();
         }
         
-        console.log('🔍 Обрабатываем путь к фото:', imagePath);
+        // ✅ 1. Cloudinary URL (новые загруженные фото)
+        if (imagePath.includes('res.cloudinary.com')) {
+            console.log('☁️ Обнаружен Cloudinary URL');
+            
+            // Проверяем, есть ли уже параметры оптимизации
+            if (imagePath.includes('/w_') || imagePath.includes('/c_')) {
+                console.log('✅ Cloudinary URL уже оптимизирован');
+                return imagePath;
+            }
+            
+            try {
+                // Добавляем параметры оптимизации для Cloudinary
+                // Формат: https://res.cloudinary.com/CLOUD_NAME/image/upload/TRANSFORMATIONS/PUBLIC_ID.EXT
+                let optimizedUrl = imagePath;
+                
+                // Ищем позицию "/upload/"
+                const uploadIndex = imagePath.indexOf('/upload/');
+                if (uploadIndex !== -1) {
+                    // Вставляем параметры трансформации после "/upload/"
+                    const before = imagePath.substring(0, uploadIndex + 8); // +8 для "/upload/"
+                    const after = imagePath.substring(uploadIndex + 8);
+                    
+                    // Параметры оптимизации для веба:
+                    // w_800 - ширина 800px
+                    // h_600 - высота 600px
+                    // c_fill - заполнение области
+                    // q_auto - автоматическое качество
+                    // f_webp - формат WebP (если браузер поддерживает)
+                    optimizedUrl = `${before}w_800,h_600,c_fill,q_auto,f_webp/${after}`;
+                    
+                    console.log('✅ Cloudinary URL оптимизирован:', optimizedUrl);
+                }
+                
+                return optimizedUrl;
+                
+            } catch (e) {
+                console.error('❌ Ошибка обработки Cloudinary URL:', e);
+                return imagePath; // Возвращаем оригинальный URL
+            }
+        }
         
-        // Если уже полный URL
+        // ✅ 2. Уже полный URL (но не Cloudinary)
         if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+            console.log('🌐 Обнаружен обычный HTTP URL');
             return imagePath;
         }
         
-        // ✅ ИЗМЕНЕНО: Проверяем uploads/cars вместо photos_cars
+        // ✅ 3. Локальные пути на сервере (старые данные)
         if (imagePath.startsWith('/static/uploads/cars/')) {
+            console.log('📁 Обнаружен локальный путь:', imagePath);
             return imagePath;
         }
         
-        // Если только имя файла
-        if (!imagePath.includes('/') && imagePath.includes('.jpg')) {
+        if (imagePath.startsWith('/static/photos_cars/')) {
+            console.log('📁 Обнаружен старый локальный путь photos_cars');
+            return imagePath;
+        }
+        
+        // ✅ 4. Если только имя файла (старый формат)
+        if (!imagePath.includes('/') && 
+            (imagePath.includes('.jpg') || imagePath.includes('.jpeg') || 
+             imagePath.includes('.png') || imagePath.includes('.webp'))) {
+            console.log('📄 Обнаружено только имя файла, добавляем путь');
             return `/static/uploads/cars/${imagePath}`;
         }
         
-        // Если старый путь
+        // ✅ 5. Если относительный путь (старый формат)
         if (imagePath.includes('uploads/cars/') || imagePath.includes('photos_cars/')) {
+            console.log('🔄 Обнаружен относительный путь, конвертируем');
             const filename = imagePath.split('/').pop();
             return `/static/uploads/cars/${filename}`;
         }
         
-        // Любой другой случай
+        // ✅ 6. Любой другой случай
+        console.log('❓ Неизвестный формат, пытаемся извлечь имя файла');
         const filename = imagePath.split('/').pop();
-        return `/static/uploads/cars/${filename}`;
+        if (filename && (filename.includes('.jpg') || filename.includes('.png') || filename.includes('.webp'))) {
+            return `/static/uploads/cars/${filename}`;
+        }
+        
+        // ✅ 7. Fallback на placeholder
+        console.log('⚠️ Не удалось определить тип пути, возвращаем placeholder');
+        return this.getDefaultCarImage();
     }
     
-    // ✅ НОВЫЙ МЕТОД: Получение дефолтного фото
+    // ✅ Cloudinary placeholder
     getDefaultCarImage() {
-        // Проверяем существует ли дефолтное фото
-        const defaultImages = [
+        // Cloudinary демо изображения (всегда доступны)
+        const cloudinaryPlaceholders = [
+            'https://res.cloudinary.com/demo/image/upload/w_800,h_600,c_fill,q_auto,f_webp/v1588016089/samples/car.jpg',
+            'https://res.cloudinary.com/demo/image/upload/w_800,h_600,c_fill,q_auto,f_webp/v1588016089/samples/automotive.jpg',
+            'https://res.cloudinary.com/demo/image/upload/w_800,h_600,c_fill,q_auto,f_webp/v1588016089/samples/road-trip.jpg'
+        ];
+        
+        const localPlaceholders = [
+            '/static/uploads/cars/placeholder.jpg',
             '/static/photos_cars/default-car.jpg',
-            '/static/uploads/cars/default-car.jpg',
             '/images/default-car.jpg'
         ];
         
-        // Можно добавить проверку существования файла через fetch
-        return defaultImages[0]; // Используем новый путь
+        // Пробуем сначала Cloudinary (всегда работает)
+        return cloudinaryPlaceholders[0];
     }
 
     showSkeleton() {
@@ -265,9 +341,12 @@ class FleetManager {
         const formattedPrice = new Intl.NumberFormat('ru-RU').format(car.daily_price || 0);
         const formattedMileage = car.mileage ? `${car.mileage.toLocaleString('ru-RU')} км` : 'Новый';
         
-        // ✅ ИЗМЕНЕНО: Используем новый метод получения фото
+        // ✅ Cloudinary оптимизированное фото
         const carImage = this.getCarImage(car);
         console.log(`🖼 Создаем карточку ${car.brand} ${car.model}:`, carImage);
+        
+        // ✅ Cloudinary fallback изображение
+        const fallbackImage = this.getRandomCarImage();
         
         return `
             <div class="car-card" data-aos="fade-up" data-car-id="${car.id}" data-category="${categorySlug}">
@@ -278,7 +357,7 @@ class FleetManager {
                          alt="${car.brand} ${car.model}" 
                          class="car-image"
                          loading="lazy"
-                         onerror="this.onerror=null; this.src='${this.getRandomCarImage()}';">
+                         onerror="console.error('❌ Ошибка загрузки изображения:', this.src); this.onerror=null; this.src='${fallbackImage}';">
                     
                     <!-- Бейджи -->
                     <div class="car-badges">
@@ -361,21 +440,23 @@ class FleetManager {
     }
 
     getRandomCarImage() {
-        // ✅ Используем локальные пути вместо Unsplash
+        // ✅ Cloudinary демо изображения (всегда доступны)
+        const cloudinaryImages = [
+            'https://res.cloudinary.com/demo/image/upload/w_800,h_600,c_fill,q_auto,f_webp/v1588016089/samples/car.jpg',
+            'https://res.cloudinary.com/demo/image/upload/w_800,h_600,c_fill,q_auto,f_webp/v1588016089/samples/automotive.jpg',
+            'https://res.cloudinary.com/demo/image/upload/w_800,h_600,c_fill,q_auto,f_webp/v1588016089/samples/road-trip.jpg',
+            'https://res.cloudinary.com/demo/image/upload/w_800,h_600,c_fill,q_auto,f_webp/v1588016089/samples/e-commerce/auto.jpg'
+        ];
+        
+        // ✅ Локальные fallback изображения
         const localImages = [
+            '/static/uploads/cars/placeholder.jpg',
             '/static/photos_cars/default-car-1.jpg',
-            '/static/photos_cars/default-car-2.jpg',
-            '/static/photos_cars/default-car-3.jpg'
+            '/static/photos_cars/default-car-2.jpg'
         ];
         
-        const unsplashImages = [
-            'https://images.unsplash.com/photo-1553440569-bcc63803a83d?w=400&h=300&fit=crop',
-            'https://images.unsplash.com/photo-1555215695-3004980ad54e?w=400&h=300&fit=crop',
-            'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=400&h=300&fit=crop'
-        ];
-        
-        // Пробуем сначала локальные
-        return localImages[Math.floor(Math.random() * localImages.length)];
+        // Используем Cloudinary для надежности
+        return cloudinaryImages[Math.floor(Math.random() * cloudinaryImages.length)];
     }
 
     setupFilters() {
@@ -470,7 +551,7 @@ class FleetManager {
         return map[status] || status || 'Неизвестно';
     }
 
-    // === ДЕМО ДАННЫЕ (если нет API) ===
+    // === ДЕМО ДАННЫЕ (Cloudinary версия) ===
     
     getMockCategories() {
         return [
@@ -482,63 +563,115 @@ class FleetManager {
         ];
     }
 
-    // === НОВЫЙ МЕТОД: Получение машин из БД бота ===
-    async getCarsFromBotDatabase() {
+    // === Cloudinary демо данные ===
+    async getCloudinaryDemoCars() {
         try {
             // Пробуем получить данные напрямую через fetch
-            const response = await fetch('http://localhost:8000/api/cars');
+            const response = await fetch('/api/cars');
             if (response.ok) {
                 const cars = await response.json();
-                console.log('✅ Получили данные напрямую из API:', cars.length);
+                console.log('✅ Получили данные из API:', cars.length);
+                
+                // Проверяем Cloudinary URL в данных
+                if (cars.length > 0 && cars[0].images) {
+                    console.log('☁️ Первое изображение в API:', cars[0].images[0]);
+                    console.log('☁️ Это Cloudinary?', cars[0].images[0].includes('cloudinary.com'));
+                }
+                
                 return cars;
             }
         } catch (error) {
-            console.log('API не доступен, используем fallback');
+            console.log('API не доступен, используем Cloudinary демо данные');
         }
         
-        // Fallback: демо данные с ПРАВИЛЬНЫМИ путями к фото
+        // Fallback: демо данные с Cloudinary URL
         return [
             {
                 id: 1,
-                brand: "Toyota",
-                model: "Camry",
-                year: 2022,
-                category_id: 2,
-                engine_capacity: 2.5,
-                horsepower: 203,
+                brand: "Mercedes-Benz",
+                model: "S-Class",
+                year: 2023,
+                category_id: 4,
+                engine_capacity: 3.0,
+                horsepower: 435,
                 fuel_type: "бензин",
                 transmission: "automatic",
                 doors: 4,
                 seats: 5,
                 color: "черный",
-                daily_price: 3500,
-                mileage: 15000,
-                features: ["кондиционер", "подогрев сидений"],
-                // ✅ ИЗМЕНЕНО: Правильные пути
-                images: ["/static/photos_cars/car_20241219_120000_0.jpg"],
-                thumbnail: "/static/photos_cars/car_20241219_120000_0.jpg",
-                description: "Toyota Camry 2022 года",
+                daily_price: 12000,
+                mileage: 5000,
+                features: ["массаж сидений", "вентиляция", "панорамная крыша"],
+                // ✅ Cloudinary URL
+                images: ["https://res.cloudinary.com/demo/image/upload/v1588016089/samples/mercedes-s-class.jpg"],
+                thumbnail: "https://res.cloudinary.com/demo/image/upload/w_400,h_300,c_fill,q_auto,f_webp/v1588016089/samples/mercedes-s-class.jpg",
+                description: "Mercedes-Benz S-Class 2023. Роскошь и технологии высшего класса.",
                 status: "available"
             },
             {
                 id: 2,
                 brand: "BMW",
-                model: "X5",
-                year: 2023,
+                model: "X7",
+                year: 2024,
                 category_id: 5,
-                engine_capacity: 3.0,
-                horsepower: 340,
-                fuel_type: "дизель",
+                engine_capacity: 4.4,
+                horsepower: 530,
+                fuel_type: "бензин",
                 transmission: "automatic",
                 doors: 5,
-                seats: 5,
+                seats: 7,
                 color: "белый",
-                daily_price: 8500,
+                daily_price: 15000,
+                mileage: 3000,
+                features: ["третий ряд сидений", "панорамная крыша", "проекционный дисплей"],
+                // ✅ Cloudinary URL
+                images: ["https://res.cloudinary.com/demo/image/upload/v1588016089/samples/bmw-x7.jpg"],
+                thumbnail: "https://res.cloudinary.com/demo/image/upload/w_400,h_300,c_fill,q_auto,f_webp/v1588016089/samples/bmw-x7.jpg",
+                description: "BMW X7 2024. Просторный и мощный люксовый внедорожник.",
+                status: "available"
+            },
+            {
+                id: 3,
+                brand: "Tesla",
+                model: "Model S",
+                year: 2023,
+                category_id: 4,
+                engine_capacity: 0, // электрический
+                horsepower: 670,
+                fuel_type: "электричество",
+                transmission: "automatic",
+                doors: 4,
+                seats: 5,
+                color: "красный",
+                daily_price: 10000,
                 mileage: 8000,
-                // ✅ ИЗМЕНЕНО: Правильные пути
-                images: ["/static/photos_cars/car_20241219_120000_1.jpg"],
-                thumbnail: "/static/photos_cars/car_20241219_120000_1.jpg",
-                description: "BMW X5 2023 года",
+                features: ["автопилот", "панорамная крыша", "премиум звук"],
+                // ✅ Cloudinary URL
+                images: ["https://res.cloudinary.com/demo/image/upload/v1588016089/samples/tesla-model-s.jpg"],
+                thumbnail: "https://res.cloudinary.com/demo/image/upload/w_400,h_300,c_fill,q_auto,f_webp/v1588016089/samples/tesla-model-s.jpg",
+                description: "Tesla Model S 2023. Будущее уже здесь. Молниеносное ускорение и автопилот.",
+                status: "available"
+            },
+            {
+                id: 4,
+                brand: "Porsche",
+                model: "911",
+                year: 2023,
+                category_id: 6,
+                engine_capacity: 3.0,
+                horsepower: 450,
+                fuel_type: "бензин",
+                transmission: "automatic",
+                doors: 2,
+                seats: 4,
+                color: "желтый",
+                daily_price: 18000,
+                mileage: 4000,
+                features: ["спорт пакет", "карбоновые элементы", "активный спойлер"],
+                // ✅ Cloudinary URL
+                images: ["https://res.cloudinary.com/demo/image/upload/v1588016089/samples/porsche-911.jpg"],
+                thumbnail: "https://res.cloudinary.com/demo/image/upload/w_400,h_300,c_fill,q_auto,f_webp/v1588016089/samples/porsche-911.jpg",
+                description: "Porsche 911 2023. Легендарный спорткар с непревзойденной динамикой.",
                 status: "available"
             }
         ];
