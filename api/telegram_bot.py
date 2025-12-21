@@ -72,6 +72,38 @@ try:
         api_secret=CLOUDINARY_API_SECRET,
         secure=True
     )
+    # ========== ИНИЦИАЛИЗАЦИЯ CLOUDINARY ==========
+try:
+    import cloudinary
+    import cloudinary.uploader
+    import cloudinary.api
+    
+    cloudinary.config(
+        cloud_name=CLOUDINARY_CLOUD_NAME,
+        api_key=CLOUDINARY_API_KEY,
+        api_secret=CLOUDINARY_API_SECRET,
+        secure=True
+    )
+    
+    # ✅ ДОБАВЬТЕ ЭТУ ПРОВЕРКУ:
+    print("=" * 60)
+    print("🔍 Cloudinary Configuration Check:")
+    print(f"   CLOUDINARY_CLOUD_NAME env: '{CLOUDINARY_CLOUD_NAME}'")
+    print(f"   cloudinary.config().cloud_name: '{cloudinary.config().cloud_name}'")
+    print(f"   Are they equal? {'✅ YES' if CLOUDINARY_CLOUD_NAME == cloudinary.config().cloud_name else '❌ NO'}")
+    print(f"   Is it 'demo'? {'⚠️ YES (PROBLEM!)' if CLOUDINARY_CLOUD_NAME == 'demo' else '✅ NO'}")
+    print("=" * 60)
+    
+    # Проверяем подключение к Cloudinary
+    cloudinary.api.ping()
+    print("✅ Cloudinary подключен и работает")
+    
+except ImportError:
+    print("❌ Cloudinary не установлен. Установите: pip install cloudinary")
+    sys.exit(1)
+except Exception as e:
+    print(f"❌ Ошибка подключения к Cloudinary: {e}")
+    sys.exit(1)
     
     # Проверяем подключение к Cloudinary
     cloudinary.api.ping()
