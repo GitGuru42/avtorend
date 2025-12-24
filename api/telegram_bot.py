@@ -72,18 +72,6 @@ try:
         api_secret=CLOUDINARY_API_SECRET,
         secure=True
     )
-    # ========== ИНИЦИАЛИЗАЦИЯ CLOUDINARY ==========
-try:
-    import cloudinary
-    import cloudinary.uploader
-    import cloudinary.api
-    
-    cloudinary.config(
-        cloud_name=CLOUDINARY_CLOUD_NAME,
-        api_key=CLOUDINARY_API_KEY,
-        api_secret=CLOUDINARY_API_SECRET,
-        secure=True
-    )
     
     # ✅ ДОБАВЬТЕ ЭТУ ПРОВЕРКУ:
     print("=" * 60)
