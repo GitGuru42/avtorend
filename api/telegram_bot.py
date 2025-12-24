@@ -583,7 +583,7 @@ async def process_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Создаем уникальный public_id
             public_id = f"avtorend/car_{car_id}/photo_{timestamp}_{photo_index}"
             
-            # Загружаем в Cloudinary
+            # ЗАГРУЖАЕМ ФОТО В CLOUDINARY (ТОЛЬКО ОДИН РАЗ!)
             result = cloudinary.uploader.upload(
                 str(temp_path),
                 public_id=public_id,
@@ -596,54 +596,36 @@ async def process_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ]
             )
             
-            # Оптимизированный URL для веба
-            optimized_url = cloudinary.CloudinaryImage(public_id).build_url(
-                width=800,
-                height=600,
-                crop="fill",
-                gravity="auto",
-                quality="auto",
-                fetch_format="webp"
-            )
-            # Загружаем в Cloudinary
-            result = cloudinary.uploader.upload(
-                str(temp_path),
-                public_id=public_id,
-                folder=f"avtorend/car_{car_id}",
-                overwrite=False,
-                resource_type="image",
-                transformation=[
-                    {"width": 1200, "height": 800, "crop": "limit", "quality": "auto"},
-                    {"fetch_format": "auto"}
-                ]
-            )
-            
-            # ✅ ДОБАВЬТЕ ОТЛАДОЧНУЮ ПЕЧАТЬ ЗДЕСЬ:
+            # ✅ ВАЖНАЯ ОТЛАДКА: Проверяем, что Cloudinary вернул
             print("=" * 60)
             print("🔍 Cloudinary Upload Debug Info:")
             print(f"   Cloud Name из конфига: {CLOUDINARY_CLOUD_NAME}")
             print(f"   Cloud Name в cloudinary.config: {cloudinary.config().cloud_name}")
             print(f"   Public ID: {public_id}")
-            print(f"   Upload Result: {result}")
             print(f"   Secure URL из result: {result.get('secure_url')}")
+            print(f"   Полный result: {result}")
             print("=" * 60)
             
-            # Оптимизированный URL для веба
-            optimized_url = cloudinary.CloudinaryImage(public_id).build_url(
-                width=800,
-                height=600,
-                crop="fill",
-                gravity="auto",
-                quality="auto",
-                fetch_format="webp"
-            )
-
-# ✅ ДОБАВЬТЕ ЕЩЕ ПЕЧАТЬ:
-print(f"✅ Optimized URL: {optimized_url}")
-print(f"   Contains 'demo'? {'YES ⚠️' if 'demo' in optimized_url else 'NO ✅'}")
-print(f"   Contains '{CLOUDINARY_CLOUD_NAME}'? {'YES ✅' if CLOUDINARY_CLOUD_NAME in optimized_url else 'NO ❌'}")
-            # Сохраняем URL
-            user_data_store[user_id]["photos"].append(optimized_url)
+            # ✅ ВАРИАНТ 1: Используем готовый secure_url (самый простой)
+            full_url = result['secure_url']
+            
+            # ИЛИ ВАРИАНТ 2: Генерируем оптимизированный URL с параметрами
+            # full_url = cloudinary.CloudinaryImage(result['public_id']).build_url(
+            #     width=800,
+            #     height=600,
+            #     crop="fill",
+            #     gravity="auto",
+            #     quality="auto",
+            #     fetch_format="webp"
+            # )
+            
+            print(f"✅ Итоговый URL для сохранения: {full_url}")
+            print(f"   Длина URL: {len(full_url)} символов")
+            print(f"   Содержит 'upload/': {'✅ Да' if 'upload/' in full_url else '❌ Нет'}")
+            print(f"   Содержит '{public_id}': {'✅ Да' if public_id in full_url else '❌ Нет'}")
+            
+            # ✅ Сохраняем ПОЛНЫЙ URL в user_data_store
+            user_data_store[user_id]["photos"].append(full_url)
             
             # Удаляем временный файл
             if temp_path.exists():
@@ -652,7 +634,7 @@ print(f"   Contains '{CLOUDINARY_CLOUD_NAME}'? {'YES ✅' if CLOUDINARY_CLOUD_NA
             await update.message.reply_text(
                 f"✅ Фото загружено в Cloudinary!\n"
                 f"📸 Загружено фото: {len(user_data_store[user_id]['photos'])}\n"
-                f"🔗 URL: {optimized_url[:50]}...\n\n"
+                f"🔗 URL: {full_url[:80]}...\n\n"
                 f"Отправьте еще фото или /done для продолжения"
             )
             
@@ -672,11 +654,7 @@ print(f"   Contains '{CLOUDINARY_CLOUD_NAME}'? {'YES ✅' if CLOUDINARY_CLOUD_NA
                 temp_path.unlink()
             
             await update.message.reply_text(
-                "❌ Ошибка загрузки в Cloudinary. Проверьте:\n"
-                "1. Ключи Cloudinary в настройках\n"
-                "2. Интернет соединение\n"
-                "3. Размер файла (макс. 10MB)\n\n"
-                "Попробуйте отправить фото еще раз."
+                f"❌ Ошибка загрузки в Cloudinary: {str(cloudinary_error)[:100]}"
             )
             return PHOTOS
             
