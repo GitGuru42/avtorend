@@ -743,20 +743,36 @@ async def process_confirmation(update: Update, context: ContextTypes.DEFAULT_TYP
         user_data_store.pop(user_id, None)
         return ConversationHandler.END
     
-    # ✅ Фильтруем только Cloudinary URLs
+    # ✅ КРИТИЧЕСКАЯ ОТЛАДКА: Что реально в данных
+    print("=" * 60)
+    print("🔍 КРИТИЧЕСКАЯ ПРОВЕРКА ДАННЫХ ПЕРЕД СОХРАНЕНИЕМ:")
+    photos = data.get("photos", [])
+    print(f"   Всего фото в данных пользователя: {len(photos)}")
+    for i, url in enumerate(photos):
+        print(f"   Фото {i+1}: {url}")
+        print(f"      Тип: {'Cloudinary' if 'cloudinary.com' in url else 'Локальный'}")
+    print("=" * 60)
+    
+    # Фильтруем только Cloudinary URLs
     cloudinary_photos = []
-    for photo_url in data.get("photos", []):
+    for photo_url in photos:
         if 'res.cloudinary.com' in photo_url:
             cloudinary_photos.append(photo_url)
+            print(f"✅ Cloudinary URL добавлен: {photo_url[:80]}...")
         else:
-            print(f"⚠️  Пропущен не-Cloudinary URL: {photo_url}")
+            print(f"❌ Пропущен не-Cloudinary URL: {photo_url}")
     
-    print(f"✅ Cloudinary фото для сохранения: {len(cloudinary_photos)} из {len(data.get('photos', []))}")
+    print(f"✅ Итого Cloudinary фото: {len(cloudinary_photos)}")
+    
+    if not cloudinary_photos:
+        await query.edit_message_text("❌ Нет Cloudinary фото для сохранения!")
+        return ConversationHandler.END
     
     # Сохранение в БД
     try:
         db = SessionLocal()
         
+        # ✅ ВАЖНО: Проверяем данные ПЕРЕД созданием схемы
         car_data = {
             "brand": data["brand"],
             "model": data["model"],
@@ -782,50 +798,67 @@ async def process_confirmation(update: Update, context: ContextTypes.DEFAULT_TYP
             "is_active": True
         }
         
-        # Используем Pydantic схему для валидации
-        car_schema = CarCreate(**car_data)
+        print(f"✅ Данные для CarCreate:")
+        print(f"   images: {car_data['images']}")
+        print(f"   thumbnail: {car_data['thumbnail']}")
+        
+        # ✅ ОТЛАДКА: Что происходит внутри CarCreate
+        try:
+            car_schema = CarCreate(**car_data)
+            print(f"✅ CarCreate создана успешно")
+            print(f"   images после валидации: {car_schema.images}")
+        except Exception as e:
+            print(f"❌ Ошибка в CarCreate: {e}")
+            await query.edit_message_text(f"❌ Ошибка валидации: {str(e)[:200]}")
+            db.close()
+            return ConversationHandler.END
         
         # Создаем объект Car
         db_car = Car(**car_schema.model_dump())
+        
+        # ✅ ОТЛАДКА: Что в объекте Car перед сохранением
+        print(f"✅ Объект Car перед сохранением:")
+        print(f"   id: будет сгенерирован")
+        print(f"   images в объекте: {db_car.images}")
+        
         db.add(db_car)
         db.commit()
         db.refresh(db_car)
         
-        # Получаем категорию для отображения
+        # ✅ КРИТИЧЕСКАЯ ОТЛАДКА: Что реально сохранилось в БД
+        print("=" * 60)
+        print("🔍 ПРОВЕРКА СОХРАНЕННЫХ ДАННЫХ:")
+        saved_car = db.query(Car).filter(Car.id == db_car.id).first()
+        print(f"✅ Автомобиль сохранен с ID: {saved_car.id}")
+        print(f"   Сохраненные фото: {len(saved_car.images) if saved_car.images else 0}")
+        
+        if saved_car.images:
+            for i, img in enumerate(saved_car.images):
+                print(f"   Фото {i+1}: {img}")
+                print(f"      Это Cloudinary? {'✅ Да' if 'cloudinary.com' in img else '❌ НЕТ!'}")
+        
         category = db.query(Category).filter(Category.id == db_car.category_id).first()
         db.close()
         
-        # Проверяем, что фото действительно сохранились как Cloudinary URLs
-        print(f"✅ Автомобиль сохранен в БД с ID: {db_car.id}")
-        print(f"   Сохраненные фото: {len(db_car.images)}")
-        if db_car.images:
-            print(f"   Первое фото: {db_car.images[0][:100]}...")
-            print(f"   Это Cloudinary URL? {'✅ Да' if 'cloudinary.com' in db_car.images[0] else '❌ Нет'}")
-        
-        # ✅ ИСПРАВЛЕННАЯ ЧАСТЬ: Убираем URL из Markdown сообщения
-        await query.edit_message_text(
-            f"✅ *Автомобиль успешно добавлен!*\n\n"
-            f"🆔 ID: {db_car.id}\n"
-            f"🚗 Марка: {db_car.brand} {db_car.model}\n"
-            f"📂 Категория: {category.name if category else 'Неизвестно'}\n"
-            f"📌 Номер: {db_car.license_plate}\n"
-            f"💰 Цена: {db_car.daily_price} руб./день\n"
-            f"📸 Фото: {len(db_car.images)} шт. в Cloudinary\n\n"
-            f"☁️  Фото доступны по URL Cloudinary",
-            parse_mode='Markdown'
-        )
-        
-        # Если нужно показать пример URL, отправляем отдельным сообщением
-        if db_car.images:
-            # Укорачиваем URL для лучшего отображения
-            short_url = db_car.images[0].replace('https://', '')
-            if len(short_url) > 50:
-                short_url = short_url[:50] + "..."
-            
-            await context.bot.send_message(
-                chat_id=query.message.chat_id,
-                text=f"🔗 Пример URL: {short_url}",
-                parse_mode=None  # Без Markdown
+        # Отправляем сообщение пользователю
+        if saved_car.images and 'cloudinary.com' in saved_car.images[0]:
+            await query.edit_message_text(
+                f"✅ *Автомобиль успешно добавлен!*\n\n"
+                f"🆔 ID: {saved_car.id}\n"
+                f"🚗 {saved_car.brand} {saved_car.model}\n"
+                f"📸 Фото: {len(saved_car.images)} шт. ☁️\n"
+                f"✅ Cloudinary URL сохранены правильно!",
+                parse_mode='Markdown'
+            )
+        else:
+            await query.edit_message_text(
+                f"⚠️ *Автомобиль добавлен, но есть проблема!*\n\n"
+                f"🆔 ID: {saved_car.id}\n"
+                f"🚗 {saved_car.brand} {saved_car.model}\n"
+                f"📸 Фото: {len(saved_car.images) if saved_car.images else 0} шт.\n"
+                f"❌ Cloudinary URLs НЕ сохранены правильно!\n"
+                f"   Первое фото: {saved_car.images[0][:50] if saved_car.images else 'Нет'}",
+                parse_mode='Markdown'
             )
         
         # Очищаем временные данные
@@ -833,10 +866,12 @@ async def process_confirmation(update: Update, context: ContextTypes.DEFAULT_TYP
         
     except Exception as e:
         logger.error(f"Ошибка сохранения автомобиля: {e}")
+        import traceback
+        traceback.print_exc()
+        
         await query.edit_message_text(
             f"❌ Ошибка при сохранении в БД:\n\n"
-            f"```{str(e)[:200]}```\n\n"
-            f"Данные фото уже загружены в Cloudinary.",
+            f"```{str(e)[:200]}```",
             parse_mode='Markdown'
         )
     
