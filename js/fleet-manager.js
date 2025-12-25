@@ -8,11 +8,17 @@ class FleetManager {
         this.categories = [];
         this.isLoading = false;
         
+        // ✅ НАСТРОЙКИ CLOUDINARY (ЗАМЕНИТЕ НА ВАШИ!)
+        this.CLOUDINARY_CLOUD_NAME = 'daxfsz15l'; // ЗАМЕНИТЕ НА ВАШ CLOUD_NAME!
+        this.CLOUDINARY_API_KEY = '288599529822729'; // Ваш API Key (если нужно)
+        this.CLOUDINARY_API_SECRET = 'OVtrZJHmq-QzHWSnU1BewtRApU4'; // Ваш API Secret (если нужно)
+        
         this.init();
     }
 
     async init() {
         console.log('🚗 Инициализация FleetManager (Cloudinary)...');
+        console.log(`☁️ Cloudinary Cloud Name: ${this.CLOUDINARY_CLOUD_NAME}`);
         this.startLoading();
     }
 
@@ -66,6 +72,13 @@ class FleetManager {
                     console.log('☁️ Первый автомобиль (Cloudinary):');
                     console.log('   Изображения:', this.cars[0].images);
                     console.log('   Обработанный URL:', this.getCarImage(this.cars[0]));
+                    
+                    // Проверим Cloudinary URL
+                    const firstImage = this.cars[0]?.images?.[0];
+                    if (firstImage) {
+                        console.log('   Исходный URL:', firstImage);
+                        console.log('   Содержит ваш cloud_name:', firstImage.includes(this.CLOUDINARY_CLOUD_NAME));
+                    }
                 }
             } else {
                 await new Promise(resolve => setTimeout(resolve, 1000));
@@ -108,14 +121,29 @@ class FleetManager {
     // ✅ ОСНОВНОЙ МЕТОД: Обработка Cloudinary URL
     processCloudinaryUrl(imageUrl) {
         if (!imageUrl || typeof imageUrl !== 'string') {
+            console.log('⚠️ URL изображения отсутствует или некорректен');
             return this.getCloudinaryPlaceholder();
         }
         
         console.log('🔍 Обрабатываем URL:', imageUrl);
         
-        // Если это Cloudinary URL
+        // ✅ Если это уже полный URL с вашим Cloudinary
         if (imageUrl.includes('res.cloudinary.com')) {
             console.log('☁️ Обнаружен Cloudinary URL');
+            
+            // ✅ ВАЖНО: Проверяем, что URL содержит ваш cloud_name, а не demo
+            if (imageUrl.includes('/demo/')) {
+                console.warn('⚠️ Обнаружен DEMO Cloudinary URL. Заменяем на ваш cloud_name...');
+                // Заменяем demo на ваш cloud_name
+                imageUrl = imageUrl.replace('/demo/', `/${this.CLOUDINARY_CLOUD_NAME}/`);
+                console.log('✅ Заменён на:', imageUrl);
+            }
+            
+            // Проверяем, содержит ли URL ваш cloud_name
+            if (!imageUrl.includes(this.CLOUDINARY_CLOUD_NAME)) {
+                console.warn(`⚠️ Cloudinary URL не содержит ваш cloud_name "${this.CLOUDINARY_CLOUD_NAME}"`);
+                console.warn(`   URL содержит: ${imageUrl.split('/')[3]}`);
+            }
             
             // Проверяем, есть ли уже параметры оптимизации
             if (imageUrl.includes('/w_') || imageUrl.includes('/c_')) {
@@ -125,7 +153,7 @@ class FleetManager {
             
             try {
                 // Добавляем параметры оптимизации для Cloudinary
-                // Формат: https://res.cloudinary.com/CLOUD_NAME/image/upload/TRANSFORMATIONS/PUBLIC_ID.EXT
+                // Формат: https://res.cloudinary.com/CLOUD_NAME/image/upload/TRANSFORMATIONS/PUBLIC_ID
                 let optimizedUrl = imageUrl;
                 
                 // Ищем позицию "/upload/"
@@ -137,26 +165,32 @@ class FleetManager {
                     // Параметры оптимизации для веба:
                     optimizedUrl = `${before}w_800,h_600,c_fill,q_auto,f_webp/${after}`;
                     
-                    console.log('✅ Cloudinary URL оптимизирован');
+                    console.log('✅ Cloudinary URL оптимизирован для веба');
                 }
                 
                 return optimizedUrl;
             } catch (e) {
                 console.error('❌ Ошибка обработки Cloudinary URL:', e);
-                return imageUrl;
+                return imageUrl; // Возвращаем как есть
             }
         }
         
-        // ✅ Если это ваш локальный путь (старые данные)
-        if (imageUrl.includes('avtorend.onrender.com/static/uploads/cars/')) {
-            console.log('🌐 Обнаружен локальный путь Render');
-            return imageUrl; // Оставляем как есть - работает
-        }
-        
-        // ✅ Если это просто имя файла (старый формат)
-        if (!imageUrl.includes('/') && imageUrl.includes('.jpg')) {
-            console.log('📄 Обнаружено только имя файла');
-            return imageUrl;
+        // ✅ Если это просто имя файла или путь (старый формат)
+        if (imageUrl.includes('.jpg') || imageUrl.includes('.png') || imageUrl.includes('.webp')) {
+            console.log('📄 Обнаружено имя файла или путь:', imageUrl);
+            
+            // Если это только имя файла без пути
+            if (!imageUrl.includes('/') && !imageUrl.includes('http')) {
+                console.log('📁 Только имя файла, формируем Cloudinary URL');
+                // Формируем Cloudinary URL из имени файла
+                return `https://res.cloudinary.com/${this.CLOUDINARY_CLOUD_NAME}/image/upload/w_800,h_600,c_fill,q_auto,f_webp/${imageUrl}`;
+            }
+            
+            // Если это локальный путь на вашем сервере
+            if (imageUrl.includes('avtorend.onrender.com') || imageUrl.includes('/static/') || imageUrl.includes('/uploads/')) {
+                console.log('🌐 Обнаружен локальный путь, возвращаем как есть');
+                return imageUrl; // Оставляем как есть
+            }
         }
         
         // ✅ Fallback на Cloudinary placeholder
@@ -164,13 +198,23 @@ class FleetManager {
         return this.getCloudinaryPlaceholder();
     }
     
-    // ✅ Cloudinary placeholder
+    // ✅ Cloudinary placeholder (ИСПРАВЛЕННЫЙ)
     getCloudinaryPlaceholder() {
-        // Cloudinary демо изображения (всегда доступны)
+        // ✅ ИСПРАВЛЕНО: Используем ВАШ cloud_name вместо demo
+        
+        // Если cloud_name не установлен, используем общий placeholder
+        if (!this.CLOUDINARY_CLOUD_NAME || this.CLOUDINARY_CLOUD_NAME === 'your_cloud_name_here') {
+            console.error('❌ Cloudinary cloud_name не установлен! Установите this.CLOUDINARY_CLOUD_NAME');
+            
+            // Возвращаем статичный URL без cloud_name (может не работать)
+            return 'https://via.placeholder.com/800x600/2c2c2c/ffffff?text=Car+Image';
+        }
+        
+        // Cloudinary изображения с ВАШИМ cloud_name
         const cloudinaryPlaceholders = [
-            'https://res.cloudinary.com/demo/image/upload/w_800,h_600,c_fill,q_auto,f_webp/v1588016089/samples/car.jpg',
-            'https://res.cloudinary.com/demo/image/upload/w_800,h_600,c_fill,q_auto,f_webp/v1588016089/samples/automotive.jpg',
-            'https://res.cloudinary.com/demo/image/upload/w_800,h_600,c_fill,q_auto,f_webp/v1588016089/samples/road-trip.jpg'
+            `https://res.cloudinary.com/${this.CLOUDINARY_CLOUD_NAME}/image/upload/w_800,h_600,c_fill,q_auto,f_webp/samples/car`,
+            `https://res.cloudinary.com/${this.CLOUDINARY_CLOUD_NAME}/image/upload/w_800,h_600,c_fill,q_auto,f_webp/samples/automotive`,
+            `https://res.cloudinary.com/${this.CLOUDINARY_CLOUD_NAME}/image/upload/w_800,h_600,c_fill,q_auto,f_webp/samples/road-trip`
         ];
         
         return cloudinaryPlaceholders[Math.floor(Math.random() * cloudinaryPlaceholders.length)];
@@ -262,7 +306,7 @@ class FleetManager {
                          alt="${car.brand} ${car.model}" 
                          class="car-image"
                          loading="lazy"
-                         onerror="this.onerror=null; this.src='${this.getCloudinaryPlaceholder()}';">
+                         onerror="this.onerror=null; this.src='${this.getCloudinaryPlaceholder()}'; console.log('⚠️ Ошибка загрузки изображения, использован placeholder');">
                     
                     <!-- Бейджи -->
                     <div class="car-badges">
@@ -375,7 +419,7 @@ class FleetManager {
         return map[status] || status || 'Неизвестно';
     }
 
-    // === ДЕМО ДАННЫЕ (Cloudinary версия) ===
+    // === ДЕМО ДАННЫЕ (Cloudinary версия - ИСПРАВЛЕННЫЕ) ===
     getMockCategories() {
         return [
             { id: 1, name: "Эконом", slug: "economy", description: "Бюджетные автомобили" },
@@ -398,7 +442,7 @@ class FleetManager {
             console.log('API не доступен, используем Cloudinary демо данные');
         }
         
-        // Fallback: демо данные с Cloudinary URL
+        // Fallback: демо данные с Cloudinary URL (ИСПРАВЛЕННЫЕ)
         return [
             {
                 id: 1,
@@ -416,8 +460,8 @@ class FleetManager {
                 daily_price: 12000,
                 mileage: 5000,
                 features: ["массаж сидений", "вентиляция", "панорамная крыша"],
-                images: ["https://res.cloudinary.com/demo/image/upload/v1588016089/samples/mercedes-s-class.jpg"],
-                thumbnail: "https://res.cloudinary.com/demo/image/upload/w_400,h_300,c_fill,q_auto,f_webp/v1588016089/samples/mercedes-s-class.jpg",
+                images: [`https://res.cloudinary.com/${this.CLOUDINARY_CLOUD_NAME}/image/upload/samples/car`],
+                thumbnail: `https://res.cloudinary.com/${this.CLOUDINARY_CLOUD_NAME}/image/upload/w_400,h_300,c_fill,q_auto,f_webp/samples/car`,
                 description: "Mercedes-Benz S-Class 2023",
                 status: "available"
             },
@@ -437,8 +481,8 @@ class FleetManager {
                 daily_price: 15000,
                 mileage: 3000,
                 features: ["третий ряд сидений", "панорамная крыша"],
-                images: ["https://res.cloudinary.com/demo/image/upload/v1588016089/samples/bmw-x7.jpg"],
-                thumbnail: "https://res.cloudinary.com/demo/image/upload/w_400,h_300,c_fill,q_auto,f_webp/v1588016089/samples/bmw-x7.jpg",
+                images: [`https://res.cloudinary.com/${this.CLOUDINARY_CLOUD_NAME}/image/upload/samples/automotive`],
+                thumbnail: `https://res.cloudinary.com/${this.CLOUDINARY_CLOUD_NAME}/image/upload/w_400,h_300,c_fill,q_auto,f_webp/samples/automotive`,
                 description: "BMW X7 2024",
                 status: "available"
             }
@@ -528,3 +572,37 @@ window.fleetManager = new FleetManager();
 window.initFleetManager = () => window.fleetManager.init();
 window.showCarDetails = (id) => window.fleetManager.showCarDetails(id);
 window.bookCar = (id) => window.fleetManager.bookCar(id);
+
+// ✅ ДОБАВЛЕНО: Отладка Cloudinary
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🔍 Проверка Cloudinary настроек...');
+    console.log(`☁️ Cloud Name: ${window.fleetManager.CLOUDINARY_CLOUD_NAME}`);
+    
+    if (window.fleetManager.CLOUDINARY_CLOUD_NAME === 'your_cloud_name_here') {
+        console.error('❌ ВНИМАНИЕ: Cloudinary cloud_name не настроен!');
+        console.error('   Пожалуйста, откройте Cloudinary Console и найдите ваш Cloud Name.');
+        console.error('   Затем замените "your_cloud_name_here" в fleet-manager.js на ваш реальный cloud_name.');
+        
+        // Покажем предупреждение пользователю
+        const warningDiv = document.createElement('div');
+        warningDiv.style.cssText = `
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: #ff4444;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 9999;
+            max-width: 300px;
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+        `;
+        warningDiv.innerHTML = `
+            <strong>⚠️ Cloudinary не настроен</strong><br>
+            Замените "your_cloud_name_here" в fleet-manager.js
+        `;
+        document.body.appendChild(warningDiv);
+        setTimeout(() => warningDiv.remove(), 10000);
+    }
+});
