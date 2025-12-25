@@ -1,1188 +1,530 @@
-"""
-telegram_bot.py - Telegram бот для AvtoRend (продакшен версия)
-Только Cloudinary хранилище, без локального сохранения
-"""
-
-import os
-import logging
-import sys
-from datetime import datetime
-from pathlib import Path
-import html
-
-# ========== НАСТРОЙКА ПУТЕЙ ==========
-current_dir = Path(__file__).parent.parent
-sys.path.insert(0, str(current_dir))
-
-# ========== НАСТРОЙКА ЛОГИРОВАНИЯ ==========
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
-
-print("=" * 60)
-print("🤖 TELEGRAM BOT - AvtoRend Админ Панель (PRODUCTION)")
-print("=" * 60)
-
-# ========== ЗАГРУЗКА ПЕРЕМЕННЫХ ОКРУЖЕНИЯ ==========
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-    print("✅ .env файл загружен")
-except ImportError:
-    print("⚠️  python-dotenv не установлен, используем системные переменные")
-
-# ========== ПРОВЕРКА КЛЮЧЕЙ CLOUDINARY (ОБЯЗАТЕЛЬНО) ==========
-CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME")
-CLOUDINARY_API_KEY = os.getenv("CLOUDINARY_API_KEY")
-CLOUDINARY_API_SECRET = os.getenv("CLOUDINARY_API_SECRET")
-
-if not all([CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET]):
-    print("❌ ОШИБКА: Cloudinary ключи не настроены!")
-    print("ℹ️  Настройте в Environment Variables на Render:")
-    print("    CLOUDINARY_CLOUD_NAME")
-    print("    CLOUDINARY_API_KEY")
-    print("    CLOUDINARY_API_SECRET")
-    sys.exit(1)
-
-print(f"☁️  Cloudinary: {CLOUDINARY_CLOUD_NAME}")
-print(f"🔑 API Key: {CLOUDINARY_API_KEY[:8]}...")
-
-# ========== КОНФИГУРАЦИЯ ==========
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-ADMIN_IDS = list(map(int, os.getenv("TELEGRAM_ADMIN_IDS", "").split(","))) if os.getenv("TELEGRAM_ADMIN_IDS") else []
-
-if not TOKEN:
-    logger.error("❌ TELEGRAM_BOT_TOKEN не найден!")
-    print("❌ ОШИБКА: TELEGRAM_BOT_TOKEN не установлен!")
-    sys.exit(1)
-
-print(f"🔐 Токен: {TOKEN[:15]}...")
-print(f"👑 Админов: {len(ADMIN_IDS) if ADMIN_IDS else 'не настроено'}")
-
-# ========== ИНИЦИАЛИЗАЦИЯ CLOUDINARY ==========
-try:
-    import cloudinary
-    import cloudinary.uploader
-    import cloudinary.api
-    
-    cloudinary.config(
-        cloud_name=CLOUDINARY_CLOUD_NAME,
-        api_key=CLOUDINARY_API_KEY,
-        api_secret=CLOUDINARY_API_SECRET,
-        secure=True
-    )
-    
-    # Проверка конфигурации Cloudinary
-    print("=" * 60)
-    print("🔍 Cloudinary Configuration Check:")
-    print(f"   CLOUDINARY_CLOUD_NAME env: '{CLOUDINARY_CLOUD_NAME}'")
-    print(f"   cloudinary.config().cloud_name: '{cloudinary.config().cloud_name}'")
-    print("=" * 60)
-    
-    # Проверяем подключение к Cloudinary
-    cloudinary.api.ping()
-    print("✅ Cloudinary подключен и работает")
-    
-except ImportError:
-    print("❌ Cloudinary не установлен. Установите: pip install cloudinary")
-    sys.exit(1)
-except Exception as e:
-    print(f"❌ Ошибка подключения к Cloudinary: {e}")
-    sys.exit(1)
-
-# ========== ИМПОРТЫ БАЗЫ ДАННЫХ ==========
-try:
-    from api.models import Car, Category, CarStatus, TransmissionType
-    from api.database import SessionLocal
-    from api.schemas import CarCreate
-    print("✅ Модули БД импортированы")
-except ImportError as e:
-    print(f"❌ Ошибка импорта БД: {e}")
-    sys.exit(1)
-
-# ========== ИМПОРТЫ TELEGRAM ==========
-try:
-    from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-    from telegram.ext import (
-        Application, 
-        CommandHandler, 
-        MessageHandler, 
-        CallbackQueryHandler,
-        ConversationHandler,
-        filters,
-        ContextTypes
-    )
-    print("✅ Модули Telegram импортированы")
-except ImportError as e:
-    print(f"❌ Ошибка импорта Telegram: {e}")
-    print("ℹ️  Установите: pip install python-telegram-bot")
-    sys.exit(1)
-
-# ========== СОСТОЯНИЯ ДЛЯ ConversationHandler ==========
-(
-    BRAND, MODEL, YEAR, LICENSE_PLATE, CATEGORY_ID, 
-    ENGINE_CAPACITY, HORSEPOWER, FUEL_TYPE, TRANSMISSION,
-    FUEL_CONSUMPTION, DOORS, SEATS, COLOR, DAILY_PRICE,
-    DEPOSIT, MILEAGE, FEATURES, DESCRIPTION, PHOTOS, CONFIRM
-) = range(20)
-
-# ========== ВРЕМЕННОЕ ХРАНИЛИЩЕ ДАННЫХ ==========
-user_data_store = {}
-
-# ========== ДЕКОРАТОРЫ ==========
-def admin_only(func):
-    """Декоратор для ограничения доступа только администраторам"""
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
-        user_id = update.effective_user.id
-        if not ADMIN_IDS:
-            await update.message.reply_text("⚠️ ADMIN_IDS не настроены в .env файле")
-            return ConversationHandler.END
-        if user_id not in ADMIN_IDS:
-            await update.message.reply_text("⛔ У вас нет прав для выполнения этой команды.")
-            return ConversationHandler.END
-        return await func(update, context, *args, **kwargs)
-    return wrapper
-
-# ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
-def escape_markdown(text: str) -> str:
-    """Экранирует специальные символы Markdown"""
-    if not text:
-        return text
-    # Экранируем символы, которые могут сломать Markdown
-    escape_chars = r'_*[]()~`>#+-=|{}.!'
-    for char in escape_chars:
-        text = text.replace(char, f'\\{char}')
-    return text
-
-# ========== ОТЛАДОЧНАЯ КОМАНДА ==========
-async def debug(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Отладочная команда - показывает информацию"""
-    user_id = update.effective_user.id
-    username = update.effective_user.username or "без username"
-    
-    await update.message.reply_text(
-        f"🔧 *Отладка бота*\n\n"
-        f"👤 Ваш ID: `{user_id}`\n"
-        f"📛 Username: @{username}\n"
-        f"📋 ADMIN_IDS: `{ADMIN_IDS}`\n"
-        f"🔍 В списке админов: **{'✅ ДА' if user_id in ADMIN_IDS else '❌ НЕТ'}**\n\n"
-        f"☁️  Cloudinary: {CLOUDINARY_CLOUD_NAME}\n"
-        f"📦 Хранилище: **ТОЛЬКО CLOUDINARY**\n\n"
-        f"📋 *Тестируйте команды:*\n"
-        f"• `/list_cars` - список авто\n"
-        f"• `/add_car` - добавить авто\n"
-        f"• `/status` - статус системы\n"
-        f"• `/check_photos` - проверить фото в БД",
-        parse_mode='Markdown'
-    )
-
-# ========== ОСНОВНЫЕ КОМАНДЫ ==========
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /start - панель администратора"""
-    await update.message.reply_text(
-        "🚗 *Админ-панель AvtoRend (PRODUCTION)*\n\n"
-        "📋 *Доступные команды:*\n"
-        "`/add_car` - Добавить новую машину\n"
-        "`/list_cars` - Показать все машины\n"
-        "`/edit_car <id> <поле> <значение>` - Редактировать\n"
-        "`/delete_car <id>` - Удалить машину\n"
-        "`/status` - Статус системы\n"
-        "`/debug` - Отладка\n"
-        "`/check_photos` - Проверить фото в БД\n"
-        "`/cancel` - Отменить операцию\n\n"
-        "☁️  *Хранилище фото:* Cloudinary\n\n"
-        "🔧 *Примеры:*\n"
-        "`/delete_car 1`\n"
-        "`/edit_car 1 daily_price 3000`",
-        parse_mode='Markdown'
-    )
-
-async def admin_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Статус системы для администратора"""
-    try:
-        db = SessionLocal()
-        cars_count = db.query(Car).count()
-        categories_count = db.query(Category).count()
-        db.close()
+// js/fleet-manager.js - Управление отображением автопарка (Cloudinary версия)
+class FleetManager {
+    constructor() {
+        this.carsGrid = document.getElementById('carsGrid');
+        this.filterButtons = document.querySelectorAll('.filter-btn');
+        this.currentFilter = 'all';
+        this.cars = [];
+        this.categories = [];
+        this.isLoading = false;
         
-        db_status = "✅ Подключена"
-    except Exception as e:
-        db_status = f"❌ Ошибка: {str(e)[:50]}"
-        cars_count = "неизвестно"
-        categories_count = "неизвестно"
-    
-    status_text = (
-        f"📊 *Статус системы (PRODUCTION)*\n\n"
-        f"🤖 Бот: ✅ Работает\n"
-        f"🗄️  База данных: {db_status}\n"
-        f"🚗 Автомобилей: {cars_count}\n"
-        f"📂 Категорий: {categories_count}\n"
-        f"👑 Админов: {len(ADMIN_IDS)}\n"
-        f"☁️  Хранилище фото: **Cloudinary**\n"
-        f"🌐 Хостинг: {'Render' if os.getenv('RENDER') else 'Локальный'}\n\n"
-        f"🟢 Система функционирует нормально"
-    )
-    
-    await update.message.reply_text(status_text, parse_mode='Markdown')
-
-# ========== КОМАНДА ПРОВЕРКИ ФОТО ==========
-async def check_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Проверить пути к фото в БД"""
-    try:
-        db = SessionLocal()
-        cars = db.query(Car).order_by(Car.id).all()
-        
-        if not cars:
-            await update.message.reply_text("🚫 В базе нет автомобилей.")
-            db.close()
-            return
-        
-        for car in cars:
-            photos_info = []
-            for i, img in enumerate(car.images or []):
-                if 'cloudinary.com' in img:
-                    photos_info.append(f"✅ Cloudinary {i+1}")
-                elif '/static/uploads/' in img:
-                    photos_info.append(f"❌ Локальный {i+1}")
-                elif img.startswith('http'):
-                    photos_info.append(f"🌐 Другой URL {i+1}")
-                else:
-                    photos_info.append(f"❓ Неизвестный {i+1}")
-            
-            sample_url = car.images[0][:100] + "..." if car.images and len(car.images[0]) > 100 else car.images[0] if car.images else "Нет фото"
-            
-            await update.message.reply_text(
-                f"🚗 *{car.brand} {car.model} (ID: {car.id})*\n"
-                f"📸 Фото: {len(car.images)} шт. - {', '.join(photos_info) if photos_info else 'Нет'}\n"
-                f"🔗 Пример: `{sample_url}`",
-                parse_mode='Markdown'
-            )
-        
-        db.close()
-    except Exception as e:
-        await update.message.reply_text(f"❌ Ошибка проверки фото: {str(e)[:200]}")
-
-# ========== ДОБАВЛЕНИЕ АВТОМОБИЛЯ ==========
-async def add_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Начать процесс добавления машины"""
-    user_id = update.effective_user.id
-    user_data_store[user_id] = {"photos": []}
-    
-    await update.message.reply_text(
-        "🚗 *Добавление нового автомобиля (Cloudinary)*\n\n"
-        "Введите марку автомобиля (например: Toyota):",
-        parse_mode='Markdown'
-    )
-    return BRAND
-
-async def process_brand(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка марки"""
-    user_id = update.effective_user.id
-    user_data_store[user_id]["brand"] = update.message.text
-    
-    await update.message.reply_text("Введите модель (например: Camry):")
-    return MODEL
-
-async def process_model(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка модели"""
-    user_id = update.effective_user.id
-    user_data_store[user_id]["model"] = update.message.text
-    
-    await update.message.reply_text("Введите год выпуска (например: 2023):")
-    return YEAR
-
-async def process_year(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка года"""
-    try:
-        year = int(update.message.text)
-        if year < 1900 or year > datetime.now().year + 1:
-            raise ValueError
-    except ValueError:
-        await update.message.reply_text("Пожалуйста, введите корректный год (например: 2023):")
-        return YEAR
-    
-    user_id = update.effective_user.id
-    user_data_store[user_id]["year"] = year
-    
-    await update.message.reply_text("Введите номерной знак (например: A123BC):")
-    return LICENSE_PLATE
-
-async def process_license_plate(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка номера"""
-    user_id = update.effective_user.id
-    user_data_store[user_id]["license_plate"] = update.message.text.upper()
-    
-    # Показываем доступные категории
-    try:
-        db = SessionLocal()
-        categories = db.query(Category).filter(Category.is_active == True).all()
-        db.close()
-        
-        if not categories:
-            await update.message.reply_text("❌ Нет доступных категорий.")
-            return ConversationHandler.END
-        
-        keyboard = []
-        for category in categories:
-            keyboard.append([InlineKeyboardButton(
-                f"{category.name} (ID: {category.id})", 
-                callback_data=f"cat_{category.id}"
-            )])
-        
-        await update.message.reply_text(
-            "📂 Выберите категорию автомобиля:",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-        return CATEGORY_ID
-    except Exception as e:
-        logger.error(f"Ошибка при получении категорий: {e}")
-        await update.message.reply_text("❌ Ошибка при загрузке категорий.")
-        return ConversationHandler.END
-
-async def process_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка выбора категории"""
-    query = update.callback_query
-    await query.answer()
-    
-    category_id = int(query.data.split("_")[1])
-    user_id = query.from_user.id
-    user_data_store[user_id]["category_id"] = category_id
-    
-    try:
-        db = SessionLocal()
-        category = db.query(Category).filter(Category.id == category_id).first()
-        db.close()
-        
-        category_name = category.name if category else f"ID: {category_id}"
-        await query.edit_message_text(f"✅ Категория: {category_name}\n\nВведите объем двигателя в литрах (например: 2.0):")
-        return ENGINE_CAPACITY
-    except Exception as e:
-        await query.edit_message_text("❌ Ошибка при загрузке категории.")
-        return ConversationHandler.END
-
-async def process_engine_capacity(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка объема двигателя"""
-    try:
-        capacity = float(update.message.text.replace(",", "."))
-        if capacity <= 0:
-            raise ValueError
-    except ValueError:
-        await update.message.reply_text("Пожалуйста, введите корректный объем (например: 2.0):")
-        return ENGINE_CAPACITY
-    
-    user_id = update.effective_user.id
-    user_data_store[user_id]["engine_capacity"] = capacity
-    
-    await update.message.reply_text("Введите мощность в л.с. (например: 150):")
-    return HORSEPOWER
-
-async def process_horsepower(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка мощности"""
-    try:
-        hp = int(update.message.text)
-        if hp <= 0:
-            raise ValueError
-    except ValueError:
-        await update.message.reply_text("Пожалуйста, введите корректную мощность (например: 150):")
-        return HORSEPOWER
-    
-    user_id = update.effective_user.id
-    user_data_store[user_id]["horsepower"] = hp
-    
-    await update.message.reply_text("Введите тип топлива (бензин, дизель, электрокар, гибрид):")
-    return FUEL_TYPE
-
-async def process_fuel_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка типа топлива"""
-    user_id = update.effective_user.id
-    user_data_store[user_id]["fuel_type"] = update.message.text
-    
-    keyboard = [
-        [InlineKeyboardButton("Автомат", callback_data="trans_automatic")],
-        [InlineKeyboardButton("Механика", callback_data="trans_manual")],
-        [InlineKeyboardButton("Вариатор", callback_data="trans_cvt")],
-        [InlineKeyboardButton("Робот", callback_data="trans_semi_automatic")],
-    ]
-    
-    await update.message.reply_text(
-        "Выберите тип трансмиссии:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-    return TRANSMISSION
-
-async def process_transmission(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка трансмиссии"""
-    query = update.callback_query
-    await query.answer()
-    
-    trans_map = {
-        "trans_automatic": TransmissionType.AUTOMATIC,
-        "trans_manual": TransmissionType.MANUAL,
-        "trans_cvt": TransmissionType.CVT,
-        "trans_semi_automatic": TransmissionType.SEMI_AUTOMATIC,
+        this.init();
     }
-    
-    user_id = query.from_user.id
-    user_data_store[user_id]["transmission"] = trans_map[query.data]
-    
-    await query.edit_message_text(f"✅ Трансмиссия: {trans_map[query.data].value}\n\nВведите расход топлива (л/100км, например: 8.5):")
-    return FUEL_CONSUMPTION
 
-async def process_fuel_consumption(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка расхода"""
-    try:
-        consumption = float(update.message.text.replace(",", "."))
-        if consumption <= 0:
-            raise ValueError
-    except ValueError:
-        await update.message.reply_text("Пожалуйста, введите корректный расход (например: 8.5):")
-        return FUEL_CONSUMPTION
-    
-    user_id = update.effective_user.id
-    user_data_store[user_id]["fuel_consumption"] = consumption
-    
-    await update.message.reply_text("Введите количество дверей (например: 4):")
-    return DOORS
+    async init() {
+        console.log('🚗 Инициализация FleetManager (Cloudinary)...');
+        this.startLoading();
+    }
 
-async def process_doors(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка количества дверей"""
-    try:
-        doors = int(update.message.text)
-        if doors <= 0:
-            raise ValueError
-    except ValueError:
-        await update.message.reply_text("Пожалуйста, введите корректное количество дверей (например: 4):")
-        return DOORS
-    
-    user_id = update.effective_user.id
-    user_data_store[user_id]["doors"] = doors
-    
-    await update.message.reply_text("Введите количество мест (например: 5):")
-    return SEATS
+    async startLoading() {
+        try {
+            this.showLoading();
+            await this.loadCategories();
+            await this.loadCars();
+            this.setupFilters();
+            this.setupEvents();
+            console.log('✅ FleetManager инициализирован (Cloudinary)');
+        } catch (error) {
+            console.error('❌ Ошибка инициализации FleetManager:', error);
+            this.showError('Не удалось загрузить автопарк. Попробуйте обновить страницу.');
+        }
+    }
 
-async def process_seats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка количества мест"""
-    try:
-        seats = int(update.message.text)
-        if seats <= 0:
-            raise ValueError
-    except ValueError:
-        await update.message.reply_text("Пожалуйста, введите корректное количество мест (например: 5):")
-        return SEATS
-    
-    user_id = update.effective_user.id
-    user_data_store[user_id]["seats"] = seats
-    
-    await update.message.reply_text("Введите цвет автомобиля (например: Черный):")
-    return COLOR
+    async loadCategories() {
+        try {
+            if (window.carAPI) {
+                this.categories = await window.carAPI.getCategories();
+            } else {
+                this.categories = this.getMockCategories();
+            }
+        } catch (error) {
+            console.error('❌ Ошибка загрузки категорий:', error);
+            this.categories = this.getMockCategories();
+        }
+    }
 
-async def process_color(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка цвета"""
-    user_id = update.effective_user.id
-    user_data_store[user_id]["color"] = update.message.text
-    
-    await update.message.reply_text("Введите цену за день (например: 2500):")
-    return DAILY_PRICE
-
-async def process_daily_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка цены"""
-    try:
-        price = float(update.message.text.replace(",", "."))
-        if price <= 0:
-            raise ValueError
-    except ValueError:
-        await update.message.reply_text("Пожалуйста, введите корректную цену (например: 2500):")
-        return DAILY_PRICE
-    
-    user_id = update.effective_user.id
-    user_data_store[user_id]["daily_price"] = price
-    
-    await update.message.reply_text("Введите сумму залога (например: 10000):")
-    return DEPOSIT
-
-async def process_deposit(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка залога"""
-    try:
-        deposit = float(update.message.text.replace(",", "."))
-        if deposit < 0:
-            raise ValueError
-    except ValueError:
-        await update.message.reply_text("Пожалуйста, введите корректную сумму залога (например: 10000):")
-        return DEPOSIT
-    
-    user_id = update.effective_user.id
-    user_data_store[user_id]["deposit"] = deposit
-    
-    await update.message.reply_text("Введите текущий пробег в км (например: 15000):")
-    return MILEAGE
-
-async def process_mileage(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка пробега"""
-    try:
-        mileage = int(update.message.text)
-        if mileage < 0:
-            raise ValueError
-    except ValueError:
-        await update.message.reply_text("Пожалуйста, введите корректный пробег (например: 15000):")
-        return MILEAGE
-    
-    user_id = update.effective_user.id
-    user_data_store[user_id]["mileage"] = mileage
-    
-    await update.message.reply_text(
-        "Введите опции через запятую (например: кондиционер, подогрев сидений):\n"
-        "Или отправьте 'нет', если опций нет:"
-    )
-    return FEATURES
-
-async def process_features(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка опций"""
-    user_id = update.effective_user.id
-    text = update.message.text.strip()
-    
-    if text.lower() == 'нет':
-        features = []
-    else:
-        features = [f.strip() for f in text.split(",")]
-    
-    user_data_store[user_id]["features"] = features
-    
-    await update.message.reply_text("Введите описание автомобиля (или отправьте 'нет' для пропуска):")
-    return DESCRIPTION
-
-async def process_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка описания"""
-    user_id = update.effective_user.id
-    text = update.message.text.strip()
-    
-    if text.lower() == 'нет':
-        description = None
-    else:
-        description = text
-    
-    user_data_store[user_id]["description"] = description
-    
-    await update.message.reply_text(
-        "📸 *Отправьте фотографии автомобиля (можно несколько).*\n"
-        "После загрузки всех фото отправьте команду /done\n"
-        "Минимум 1 фото рекомендуется.\n\n"
-        "☁️  *Фото будут сохранены в Cloudinary*",
-        parse_mode='Markdown'
-    )
-    return PHOTOS
-
-async def process_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка загрузки фото - ТОЛЬКО Cloudinary"""
-    user_id = update.effective_user.id
-    
-    if "photos" not in user_data_store.get(user_id, {}):
-        user_data_store[user_id] = {"photos": []}
-    
-    try:
-        photo_file = await update.message.photo[-1].get_file()
+    async loadCars(filters = {}) {
+        this.isLoading = true;
         
-        # Создаем временный файл
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        temp_filename = f"temp_{user_id}_{timestamp}.jpg"
-        
-        # Создаем временную директорию
-        temp_dir = Path("temp_uploads")
-        temp_dir.mkdir(exist_ok=True)
-        temp_path = temp_dir / temp_filename
-        
-        # Скачиваем фото
-        await photo_file.download_to_drive(temp_path)
-        
-        # Получаем car_id для папки в Cloudinary
-        car_id = user_data_store[user_id].get("temp_car_id", 0)
-        if car_id == 0:
-            # Генерируем временный ID для папки в Cloudinary
-            car_id = int(datetime.now().timestamp()) % 1000000
-            user_data_store[user_id]["temp_car_id"] = car_id
-        
-        # ========== ЗАГРУЗКА В CLOUDINARY ==========
-        try:
-            # ✅ ВАЖНО: ВОССТАНАВЛИВАЕМ СТАРУЮ СТРУКТУРУ ЗАГРУЗКИ
-            # Сначала создаем папку для автомобиля (если ее нет)
-            folder_name = f"avtorend/car_{car_id}"
+        try {
+            this.showSkeleton();
             
-            # Индекс фото в этом автомобиле
-            photo_index = len(user_data_store[user_id]['photos']) + 1
-            
-            # Имя файла без папки (будет автоматически сохранено в указанной папке)
-            filename = f"photo_{timestamp}_{photo_index}.jpg"
-            
-            # Public ID будет включать путь к папке
-            public_id = f"{folder_name}/{filename.replace('.jpg', '')}"
-            
-            print(f"🔍 Загрузка в Cloudinary...")
-            print(f"   Папка: {folder_name}")
-            print(f"   Public ID: {public_id}")
-            print(f"   Файл: {temp_path}")
-            print(f"   Размер: {temp_path.stat().st_size} байт")
-            
-            # Загружаем фото в Cloudinary с указанием папки
-            result = cloudinary.uploader.upload(
-                str(temp_path),
-                public_id=public_id,
-                folder=folder_name,  # ✅ Указываем папку
-                overwrite=False,
-                resource_type="image",
-                timeout=30
-            )
-            
-            cloudinary_url = result.get('secure_url')
-            
-            if not cloudinary_url:
-                raise ValueError("Cloudinary не вернул URL")
-            
-            # Проверяем URL
-            print(f"✅ Cloudinary загрузка успешна!")
-            print(f"   Public ID: {result.get('public_id')}")
-            print(f"   Папка: {result.get('folder')}")
-            print(f"   Secure URL: {cloudinary_url[:100]}...")
-            print(f"   Содержит папку 'avtorend/': {'✅ Да' if 'avtorend/' in cloudinary_url else '❌ Нет'}")
-            
-            # ✅ Сохраняем Cloudinary URL
-            user_data_store[user_id]["photos"].append(cloudinary_url)
-            print(f"✅ URL добавлен. Всего фото: {len(user_data_store[user_id]['photos'])}")
-            
-            # Удаляем временный файл
-            if temp_path.exists():
-                temp_path.unlink()
-            
-            await update.message.reply_text(
-                f"✅ Фото загружено в Cloudinary!\n"
-                f"📸 Загружено фото: {len(user_data_store[user_id]['photos'])}\n"
-                f"📁 Папка: {folder_name}\n\n"
-                f"Отправьте еще фото или /done для продолжения"
-            )
-            
-            # Очищаем временную директорию если пуста
-            try:
-                if temp_dir.exists() and not any(temp_dir.iterdir()):
-                    temp_dir.rmdir()
-            except:
-                pass
+            if (window.carAPI) {
+                const apiFilters = {};
+                if (filters.category && filters.category !== 'all') {
+                    const category = this.categories.find(c => c.slug === filters.category);
+                    if (category) {
+                        apiFilters.category_id = category.id;
+                    }
+                }
                 
-            return PHOTOS
+                this.cars = await window.carAPI.getCars(apiFilters);
+                console.log('🚗 Загружены автомобили из API:', this.cars.length);
+                
+                // ✅ Cloudinary отладка
+                if (this.cars.length > 0) {
+                    console.log('☁️ Первый автомобиль (Cloudinary):');
+                    console.log('   Изображения:', this.cars[0].images);
+                    console.log('   Обработанный URL:', this.getCarImage(this.cars[0]));
+                }
+            } else {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                this.cars = this.getCloudinaryDemoCars();
+            }
             
-        except Exception as cloudinary_error:
-            logger.error(f"Ошибка Cloudinary: {cloudinary_error}")
-            # Удаляем временный файл
-            if temp_path.exists():
-                temp_path.unlink()
-            
-            await update.message.reply_text(
-                f"❌ Ошибка загрузки в Cloudinary: {str(cloudinary_error)[:100]}"
-            )
-            return PHOTOS
-            
-    except Exception as e:
-        logger.error(f"Общая ошибка загрузки фото: {e}")
-        await update.message.reply_text("❌ Ошибка при загрузке фото. Попробуйте еще раз.")
-        return PHOTOS
+            this.renderCars();
+        } catch (error) {
+            console.error('❌ Ошибка загрузки автомобилей:', error);
+            this.showError('Ошибка загрузки автомобилей. Проверьте подключение к серверу.');
+        } finally {
+            this.isLoading = false;
+        }
+    }
 
-async def process_done_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Завершение загрузки фото"""
-    user_id = update.effective_user.id
-    
-    if not user_data_store[user_id].get("photos"):
-        await update.message.reply_text(
-            "❌ Вы не загрузили ни одного фото!\n"
-            "Пожалуйста, загрузите хотя бы одно фото:"
-        )
-        return PHOTOS
-    
-    # ✅ ОТЛАДКА: Проверяем, какие URLs у нас есть
-    print("=" * 60)
-    print("🔍 ОТЛАДКА: Фото перед сохранением в БД:")
-    photos = user_data_store[user_id].get("photos", [])
-    for i, photo_url in enumerate(photos):
-        print(f"  Фото {i+1}: {photo_url}")
-        print(f"    Тип: {'Cloudinary' if 'cloudinary.com' in photo_url else 'Локальный'}")
-        print(f"    Содержит 'avtorend/': {'✅ Да' if 'avtorend/' in photo_url else '❌ Нет'}")
-    print(f"  Всего фото: {len(photos)}")
-    print("=" * 60)
-    
-    # Подтверждение данных
-    data = user_data_store[user_id]
-    
-    summary = (
-        f"📋 *Проверьте данные автомобиля:*\n\n"
-        f"🚗 {data['brand']} {data['model']} ({data['year']})\n"
-        f"📌 Номер: {data['license_plate']}\n"
-        f"📂 Категория ID: {data['category_id']}\n"
-        f"⚙️ Двигатель: {data['engine_capacity']}л, {data['horsepower']}л.с.\n"
-        f"⛽ Топливо: {data['fuel_type']}, расход: {data['fuel_consumption']}л/100км\n"
-        f"🔄 Трансмиссия: {data['transmission'].value}\n"
-        f"🚪 Дверей: {data['doors']}, Мест: {data['seats']}\n"
-        f"🎨 Цвет: {data['color']}\n"
-        f"💰 Цена/день: {data['daily_price']} руб.\n"
-        f"💵 Залог: {data['deposit']} руб.\n"
-        f"📏 Пробег: {data['mileage']} км\n"
-        f"📸 Фото в Cloudinary: {len(data['photos'])} шт.\n"
-    )
-    
-    if data.get('features'):
-        summary += f"🎯 Опции: {', '.join(data['features'])}\n"
-    
-    if data.get('description'):
-        summary += f"📝 Описание: {data['description'][:100]}...\n"
-    
-    keyboard = [
-        [InlineKeyboardButton("✅ Сохранить в БД", callback_data="confirm_save")],
-        [InlineKeyboardButton("❌ Отменить", callback_data="confirm_cancel")]
-    ]
-    
-    await update.message.reply_text(
-        summary,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
-    return CONFIRM
-
-async def process_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка подтверждения"""
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = query.from_user.id
-    data = user_data_store[user_id]
-    
-    if query.data == "confirm_cancel":
-        await query.edit_message_text("❌ Добавление автомобиля отменено.")
-        user_data_store.pop(user_id, None)
-        return ConversationHandler.END
-    
-    # ✅ Фильтруем только Cloudinary URLs
-    cloudinary_photos = []
-    for photo_url in data.get("photos", []):
-        if 'res.cloudinary.com' in photo_url:
-            cloudinary_photos.append(photo_url)
-        else:
-            print(f"⚠️  Пропущен не-Cloudinary URL: {photo_url}")
-    
-    print(f"✅ Cloudinary фото для сохранения: {len(cloudinary_photos)} из {len(data.get('photos', []))}")
-    
-    # Сохранение в БД
-    try:
-        db = SessionLocal()
+    // ✅ Cloudinary версия: Получение фото автомобиля
+    getCarImage(car) {
+        if (!car) return this.getCloudinaryPlaceholder();
         
-        car_data = {
-            "brand": data["brand"],
-            "model": data["model"],
-            "year": data["year"],
-            "license_plate": data["license_plate"],
-            "category_id": data["category_id"],
-            "engine_capacity": data["engine_capacity"],
-            "horsepower": data["horsepower"],
-            "fuel_type": data["fuel_type"],
-            "transmission": data["transmission"],
-            "fuel_consumption": data["fuel_consumption"],
-            "doors": data["doors"],
-            "seats": data["seats"],
-            "color": data["color"],
-            "daily_price": data["daily_price"],
-            "deposit": data["deposit"],
-            "mileage": data["mileage"],
-            "features": data.get("features", []),
-            "images": cloudinary_photos,  # ✅ ТОЛЬКО Cloudinary URLs
-            "thumbnail": cloudinary_photos[0] if cloudinary_photos else None,
-            "description": data.get("description"),
-            "status": CarStatus.AVAILABLE,
-            "is_active": True
+        // 1. Используем хелпер из carAPI
+        if (window.carAPI && typeof window.carAPI.getCarImageUrl === 'function') {
+            return window.carAPI.getCarImageUrl(car);
         }
         
-        # Используем Pydantic схему для валидации
-        car_schema = CarCreate(**car_data)
+        // 2. Берем первое фото из массива images
+        if (car.images && car.images.length > 0) {
+            const firstImage = car.images[0];
+            return this.processCloudinaryUrl(firstImage);
+        }
         
-        # Создаем объект Car
-        db_car = Car(**car_schema.model_dump())
-        db.add(db_car)
-        db.commit()
-        db.refresh(db_car)
+        // 3. Проверяем thumbnail
+        if (car.thumbnail) {
+            return this.processCloudinaryUrl(car.thumbnail);
+        }
         
-        # Получаем категорию для отображения
-        category = db.query(Category).filter(Category.id == db_car.category_id).first()
-        db.close()
-        
-        # Проверяем, что фото действительно сохранились как Cloudinary URLs
-        print(f"✅ Автомобиль сохранен в БД с ID: {db_car.id}")
-        print(f"   Сохраненные фото: {len(db_car.images)}")
-        if db_car.images:
-            print(f"   Первое фото: {db_car.images[0][:100]}...")
-            print(f"   Это Cloudinary URL? {'✅ Да' if 'cloudinary.com' in db_car.images[0] else '❌ Нет'}")
-            print(f"   Содержит 'avtorend/': {'✅ Да' if 'avtorend/' in db_car.images[0] else '❌ Нет'}")
-        
-        # ✅ ИСПРАВЛЕННАЯ ЧАСТЬ: Убираем URL из Markdown сообщения
-        await query.edit_message_text(
-            f"✅ *Автомобиль успешно добавлен!*\n\n"
-            f"🆔 ID: {db_car.id}\n"
-            f"🚗 Марка: {db_car.brand} {db_car.model}\n"
-            f"📂 Категория: {category.name if category else 'Неизвестно'}\n"
-            f"📌 Номер: {db_car.license_plate}\n"
-            f"💰 Цена: {db_car.daily_price} руб./день\n"
-            f"📸 Фото: {len(db_car.images)} шт. в Cloudinary\n"
-            f"📁 Папка: avtorend/car_{db_car.id}\n\n"
-            f"☁️  Фото доступны по URL Cloudinary",
-            parse_mode='Markdown'
-        )
-        
-        # Если нужно показать пример URL, отправляем отдельным сообщением
-        if db_car.images:
-            # Укорачиваем URL для лучшего отображения
-            short_url = db_car.images[0].replace('https://', '')
-            if len(short_url) > 50:
-                short_url = short_url[:50] + "..."
-            
-            await context.bot.send_message(
-                chat_id=query.message.chat_id,
-                text=f"🔗 Пример URL: {short_url}",
-                parse_mode=None  # Без Markdown
-            )
-        
-        # Очищаем временные данные
-        user_data_store.pop(user_id, None)
-        
-    except Exception as e:
-        logger.error(f"Ошибка сохранения автомобиля: {e}")
-        await query.edit_message_text(
-            f"❌ Ошибка при сохранении в БД:\n\n"
-            f"```{str(e)[:200]}```\n\n"
-            f"Данные фото уже загружены в Cloudinary.",
-            parse_mode='Markdown'
-        )
+        // 4. Если фото нет - используем Cloudinary placeholder
+        return this.getCloudinaryPlaceholder();
+    }
     
-    return ConversationHandler.END
-
-# ========== СПИСОК АВТОМОБИЛЕЙ ==========
-async def list_cars(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показать список всех машин"""
-    try:
-        db = SessionLocal()
-        cars = db.query(Car).filter(Car.is_active == True).order_by(Car.id).all()
-        db.close()
+    // ✅ ОСНОВНОЙ МЕТОД: Обработка Cloudinary URL
+    processCloudinaryUrl(imageUrl) {
+        if (!imageUrl || typeof imageUrl !== 'string') {
+            return this.getCloudinaryPlaceholder();
+        }
         
-        if not cars:
-            await update.message.reply_text("🚫 В базе нет автомобилей.")
-            return
+        console.log('🔍 Обрабатываем URL:', imageUrl);
         
-        message = "📋 *Список автомобилей:*\n\n"
-        for car in cars[:10]:  # Ограничиваем 10 машинами
-            status_icons = {
-                "available": "✅",
-                "rented": "🔴",
-                "maintenance": "🔧",
-                "reserved": "🟡",
-                "unavailable": "⛔"
+        // Если это Cloudinary URL
+        if (imageUrl.includes('res.cloudinary.com')) {
+            console.log('☁️ Обнаружен Cloudinary URL');
+            
+            // Проверяем, есть ли уже параметры оптимизации
+            if (imageUrl.includes('/w_') || imageUrl.includes('/c_')) {
+                console.log('✅ Cloudinary URL уже оптимизирован');
+                return imageUrl;
             }
-            icon = status_icons.get(car.status.value, "❓")
             
-            # Проверяем тип фото
-            photo_type = "☁️" if car.images and 'cloudinary.com' in car.images[0] else "💾" if car.images else "❌"
-            
-            # Проверяем структуру загрузки
-            folder_type = "📁" if car.images and 'avtorend/' in car.images[0] else "📄" if car.images else ""
-            
-            message += (
-                f"{icon} *ID: {car.id}*\n"
-                f"   {car.brand} {car.model} ({car.year})\n"
-                f"   Номер: {car.license_plate}\n"
-                f"   Цена: {car.daily_price} руб./день\n"
-                f"   Фото: {len(car.images)} шт. {photo_type} {folder_type}\n\n"
-            )
-        
-        if len(cars) > 10:
-            message += f"... и еще {len(cars) - 10} автомобилей\n"
-        
-        message += f"Всего: *{len(cars)}* автомобилей\n"
-        message += f"☁️ = Cloudinary, 💾 = Локальные, ❌ = Нет фото\n"
-        message += f"📁 = Папка avtorend/, 📄 = Без папки"
-        
-        await update.message.reply_text(message, parse_mode='Markdown')
-    except Exception as e:
-        logger.error(f"Ошибка при получении списка автомобилей: {e}")
-        await update.message.reply_text("❌ Ошибка при загрузке списка автомобилей.")
-
-# ========== УДАЛЕНИЕ АВТОМОБИЛЯ ==========
-async def delete_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Удалить машину по ID и фото из Cloudinary"""
-    if not context.args:
-        await update.message.reply_text("Используйте: /delete_car <ID автомобиля>\nПример: `/delete_car 1`", parse_mode='Markdown')
-        return
-    
-    try:
-        car_id = int(context.args[0])
-    except ValueError:
-        await update.message.reply_text("Пожалуйста, укажите числовой ID автомобиля")
-        return
-    
-    try:
-        db = SessionLocal()
-        car = db.query(Car).filter(Car.id == car_id).first()
-        
-        if not car:
-            db.close()
-            await update.message.reply_text(f"❌ Автомобиль с ID {car_id} не найден")
-            return
-        
-        # Удаляем фото из Cloudinary (только если это Cloudinary URLs)
-        deleted_count = 0
-        cloudinary_count = 0
-        
-        for image_url in car.images:
-            if "res.cloudinary.com" in image_url:
-                cloudinary_count += 1
-                try:
-                    # Извлекаем public_id из URL
-                    # Пример URL: https://res.cloudinary.com/daxfsz15l/image/upload/v1766578214/avtorend/car_123/photo_123.jpg
-                    parts = image_url.split('/')
+            try {
+                // Добавляем параметры оптимизации для Cloudinary
+                // Формат: https://res.cloudinary.com/CLOUD_NAME/image/upload/TRANSFORMATIONS/PUBLIC_ID.EXT
+                let optimizedUrl = imageUrl;
+                
+                // Ищем позицию "/upload/"
+                const uploadIndex = imageUrl.indexOf('/upload/');
+                if (uploadIndex !== -1) {
+                    const before = imageUrl.substring(0, uploadIndex + 8); // +8 для "/upload/"
+                    const after = imageUrl.substring(uploadIndex + 8);
                     
-                    # Ищем index после 'upload'
-                    try:
-                        upload_index = parts.index('upload')
-                        # public_id - это все после 'upload/v1234567890/'
-                        if upload_index + 2 < len(parts):
-                            public_id_parts = parts[upload_index + 2:]  # Пропускаем 'upload' и версию 'v1234567890'
-                            public_id = '/'.join(public_id_parts)
-                            # Убираем расширение файла
-                            public_id = public_id.rsplit('.', 1)[0]
-                            
-                            print(f"🔍 Удаление из Cloudinary: public_id={public_id}")
-                            
-                            # Удаляем из Cloudinary
-                            result = cloudinary.uploader.destroy(public_id)
-                            if result.get('result') == 'ok':
-                                deleted_count += 1
-                                logger.info(f"Удалено из Cloudinary: {public_id}")
-                            else:
-                                logger.warning(f"Не удалось удалить из Cloudinary: {public_id}")
-                    except ValueError:
-                        logger.warning(f"Не найден 'upload' в URL: {image_url}")
-                            
-                except Exception as e:
-                    logger.error(f"Ошибка удаления фото из Cloudinary: {e}")
+                    // Параметры оптимизации для веба:
+                    optimizedUrl = `${before}w_800,h_600,c_fill,q_auto,f_webp/${after}`;
+                    
+                    console.log('✅ Cloudinary URL оптимизирован');
+                }
+                
+                return optimizedUrl;
+            } catch (e) {
+                console.error('❌ Ошибка обработки Cloudinary URL:', e);
+                return imageUrl;
+            }
+        }
         
-        # Удаляем запись из БД
-        db.delete(car)
-        db.commit()
-        db.close()
+        // ✅ Если это ваш локальный путь (старые данные)
+        if (imageUrl.includes('avtorend.onrender.com/static/uploads/cars/')) {
+            console.log('🌐 Обнаружен локальный путь Render');
+            return imageUrl; // Оставляем как есть - работает
+        }
         
-        await update.message.reply_text(
-            f"✅ *Автомобиль удален*\n\n"
-            f"🚗 {car.brand} {car.model}\n"
-            f"🆔 ID: {car.id}\n"
-            f"📌 Номер: {car.license_plate}\n"
-            f"📸 Cloudinary фото: {cloudinary_count} шт.\n"
-            f"🗑️  Удалено из Cloudinary: {deleted_count} шт.",
-            parse_mode='Markdown'
-        )
-    except Exception as e:
-        logger.error(f"Ошибка удаления автомобиля: {e}")
-        await update.message.reply_text(f"❌ Ошибка при удалении автомобиля: {e}")
+        // ✅ Если это просто имя файла (старый формат)
+        if (!imageUrl.includes('/') && imageUrl.includes('.jpg')) {
+            console.log('📄 Обнаружено только имя файла');
+            return imageUrl;
+        }
+        
+        // ✅ Fallback на Cloudinary placeholder
+        console.log('⚠️ Неизвестный формат URL, используем placeholder');
+        return this.getCloudinaryPlaceholder();
+    }
+    
+    // ✅ Cloudinary placeholder
+    getCloudinaryPlaceholder() {
+        // Cloudinary демо изображения (всегда доступны)
+        const cloudinaryPlaceholders = [
+            'https://res.cloudinary.com/demo/image/upload/w_800,h_600,c_fill,q_auto,f_webp/v1588016089/samples/car.jpg',
+            'https://res.cloudinary.com/demo/image/upload/w_800,h_600,c_fill,q_auto,f_webp/v1588016089/samples/automotive.jpg',
+            'https://res.cloudinary.com/demo/image/upload/w_800,h_600,c_fill,q_auto,f_webp/v1588016089/samples/road-trip.jpg'
+        ];
+        
+        return cloudinaryPlaceholders[Math.floor(Math.random() * cloudinaryPlaceholders.length)];
+    }
 
-# ========== РЕДАКТИРОВАНИЕ АВТОМОБИЛЯ ==========
-async def edit_car(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Редактировать машину по ID"""
-    if not context.args:
-        await update.message.reply_text(
-            "*Используйте:* /edit_car <id> <поле> <значение>\n\n"
-            "*Доступные поля:*\n"
-            "• `daily_price` - цена за день\n"
-            "• `deposit` - залог\n" 
-            "• `status` - статус (available, rented, maintenance, reserved, unavailable)\n"
-            "• `mileage` - пробег\n"
-            "• `description` - описание\n\n"
-            "*Пример:*\n"
-            "`/edit_car 1 daily_price 3000`\n"
-            "`/edit_car 1 status maintenance`",
-            parse_mode='Markdown'
-        )
-        return
-    
-    if len(context.args) < 3:
-        await update.message.reply_text(
-            "Недостаточно аргументов. Формат:\n"
-            "`/edit_car <id> <поле> <значение>`",
-            parse_mode='Markdown'
-        )
-        return
-    
-    try:
-        car_id = int(context.args[0])
-        field = context.args[1]
-        value = " ".join(context.args[2:])
-    except ValueError:
-        await update.message.reply_text("Неверный формат ID")
-        return
-    
-    try:
-        db = SessionLocal()
-        car = db.query(Car).filter(Car.id == car_id).first()
+    showSkeleton() {
+        if (!this.carsGrid) return;
         
-        if not car:
-            db.close()
-            await update.message.reply_text(f"❌ Автомобиль с ID {car_id} не найден")
-            return
+        const skeletonHTML = `
+            <div class="car-card skeleton">
+                <div class="car-image-container skeleton-image"></div>
+                <div class="car-info">
+                    <div class="skeleton-line" style="width: 70%; height: 24px; margin-bottom: 12px;"></div>
+                    <div class="skeleton-line" style="width: 50%; height: 20px; margin-bottom: 16px;"></div>
+                    <div class="car-specs">
+                        <div class="car-spec">
+                            <div class="skeleton-circle" style="width: 20px; height: 20px;"></div>
+                            <div class="skeleton-line" style="width: 60px; height: 16px;"></div>
+                        </div>
+                        <div class="car-spec">
+                            <div class="skeleton-circle" style="width: 20px; height: 20px;"></div>
+                            <div class="skeleton-line" style="width: 60px; height: 16px;"></div>
+                        </div>
+                        <div class="car-spec">
+                            <div class="skeleton-circle" style="width: 20px; height: 20px;"></div>
+                            <div class="skeleton-line" style="width: 60px; height: 16px;"></div>
+                        </div>
+                        <div class="car-spec">
+                            <div class="skeleton-circle" style="width: 20px; height: 20px;"></div>
+                            <div class="skeleton-line" style="width: 60px; height: 16px;"></div>
+                        </div>
+                    </div>
+                    <div class="car-actions">
+                        <div class="skeleton-line" style="width: 100%; height: 44px; border-radius: 8px;"></div>
+                    </div>
+                </div>
+            </div>
+        `.repeat(6);
         
-        old_value = getattr(car, field, None)
-        
-        # Обновляем поле
-        if field == "daily_price":
-            car.daily_price = float(value)
-        elif field == "deposit":
-            car.deposit = float(value)
-        elif field == "mileage":
-            car.mileage = int(value)
-        elif field == "status":
-            if value in [s.value for s in CarStatus]:
-                car.status = CarStatus(value)
-            else:
-                await update.message.reply_text(
-                    f"❌ Неверный статус. Допустимые: {', '.join([s.value for s in CarStatus])}"
-                )
-                db.close()
-                return
-        elif field == "description":
-            car.description = value
-        else:
-            await update.message.reply_text(
-                f"❌ Поле '{field}' недоступно для редактирования"
-            )
-            db.close()
-            return
-        
-        db.commit()
-        await update.message.reply_text(
-            f"✅ *Автомобиль обновлен*\n\n"
-            f"🆔 ID: {car_id}\n"
-            f"🚗 {car.brand} {car.model}\n"
-            f"📌 Поле: {field}\n"
-            f"🔄 Было: {old_value}\n"
-            f"➡️ Стало: {value}",
-            parse_mode='Markdown'
-        )
-        
-    except ValueError as e:
-        await update.message.reply_text(f"❌ Неверное значение для поля {field}: {e}")
-    except Exception as e:
-        logger.error(f"Ошибка редактирования автомобиля: {e}")
-        await update.message.reply_text(f"❌ Ошибка при редактировании: {e}")
-    finally:
-        try:
-            db.close()
-        except:
-            pass
+        this.carsGrid.innerHTML = skeletonHTML;
+    }
 
-# ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Отмена текущей операции"""
-    user_id = update.effective_user.id
-    if user_id in user_data_store:
-        user_data_store.pop(user_id, None)
-    await update.message.reply_text("Операция отменена.")
-    return ConversationHandler.END
-
-async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик ошибок"""
-    logger.error(f"Update вызвал ошибку: {context.error}")
-    if update and hasattr(update, 'message') and update.message:
-        await update.message.reply_text("❌ Произошла ошибка. Попробуйте еще раз.")
-
-# ========== ГЛАВНАЯ ФУНКЦИЯ ЗАПУСКА ==========
-def start_bot():
-    """Запуск бота - вызывается из bot_runner.py"""
-    
-    print("\n" + "=" * 60)
-    print("🚀 ЗАПУСК ТЕЛЕГРАМ БОТА (PRODUCTION)")
-    print("=" * 60)
-    print(f"☁️  Cloudinary: {CLOUDINARY_CLOUD_NAME}")
-    print(f"🔐 Хранилище: ТОЛЬКО CLOUDINARY")
-    print("=" * 60)
-    
-    try:
-        # Создаем приложение
-        application = Application.builder().token(TOKEN).build()
+    renderCars() {
+        if (!this.carsGrid) return;
         
-        # 1. РЕГИСТРИРУЕМ ОБЫЧНЫЕ КОМАНДЫ ПЕРВЫМИ
-        application.add_handler(CommandHandler("debug", debug))
-        application.add_handler(CommandHandler("start", start))
-        application.add_handler(CommandHandler("status", admin_status))
-        application.add_handler(CommandHandler("list_cars", list_cars))
-        application.add_handler(CommandHandler("delete_car", delete_car))
-        application.add_handler(CommandHandler("edit_car", edit_car))
-        application.add_handler(CommandHandler("check_photos", check_photos))
-        application.add_handler(CommandHandler("cancel", cancel))
+        if (this.isLoading) {
+            this.showSkeleton();
+            return;
+        }
         
-        # 2. ПОТОМ ConversationHandler (важно - ПОСЛЕ обычных команд!)
-        conv_handler = ConversationHandler(
-            entry_points=[CommandHandler("add_car", add_car)],
-            states={
-                BRAND: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_brand)],
-                MODEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_model)],
-                YEAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_year)],
-                LICENSE_PLATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_license_plate)],
-                CATEGORY_ID: [CallbackQueryHandler(process_category, pattern="^cat_")],
-                ENGINE_CAPACITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_engine_capacity)],
-                HORSEPOWER: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_horsepower)],
-                FUEL_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_fuel_type)],
-                TRANSMISSION: [CallbackQueryHandler(process_transmission, pattern="^trans_")],
-                FUEL_CONSUMPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_fuel_consumption)],
-                DOORS: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_doors)],
-                SEATS: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_seats)],
-                COLOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_color)],
-                DAILY_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_daily_price)],
-                DEPOSIT: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_deposit)],
-                MILEAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_mileage)],
-                FEATURES: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_features)],
-                DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_description)],
-                PHOTOS: [
-                    MessageHandler(filters.PHOTO, process_photo),
-                    CommandHandler("done", process_done_photos)
-                ],
-                CONFIRM: [CallbackQueryHandler(process_confirmation, pattern="^confirm_")]
+        if (this.cars.length === 0) {
+            this.carsGrid.innerHTML = this.createNoCarsMessage();
+            return;
+        }
+
+        const carsHTML = this.cars.map(car => this.createCarCard(car)).join('');
+        this.carsGrid.innerHTML = carsHTML;
+        
+        if (window.AOS) {
+            setTimeout(() => AOS.refresh(), 100);
+        }
+        
+        setTimeout(() => {
+            const cards = this.carsGrid.querySelectorAll('.car-card');
+            cards.forEach((card, index) => {
+                setTimeout(() => {
+                    card.classList.add('loaded');
+                }, index * 100);
+            });
+        }, 100);
+    }
+
+    createCarCard(car) {
+        const category = car.category || this.categories.find(c => c.id === car.category_id);
+        const categoryName = category?.name || 'Не указано';
+        const categorySlug = category?.slug || 'other';
+        
+        const formattedPrice = new Intl.NumberFormat('ru-RU').format(car.daily_price || 0);
+        
+        // ✅ Cloudinary оптимизированное фото
+        const carImage = this.getCarImage(car);
+        
+        return `
+            <div class="car-card" data-aos="fade-up" data-car-id="${car.id}" data-category="${categorySlug}">
+                <!-- Картинка -->
+                <div class="car-image-container">
+                    <div class="image-gradient"></div>
+                    <img src="${carImage}" 
+                         alt="${car.brand} ${car.model}" 
+                         class="car-image"
+                         loading="lazy"
+                         onerror="this.onerror=null; this.src='${this.getCloudinaryPlaceholder()}';">
+                    
+                    <!-- Бейджи -->
+                    <div class="car-badges">
+                        <span class="car-category-badge ${categorySlug}">
+                            <span class="badge-icon">${this.getCategoryIcon(categorySlug)}</span>
+                            ${categoryName}
+                        </span>
+                        <span class="car-status-badge ${car.status || 'available'}">
+                            ${this.getStatusText(car.status)}
+                        </span>
+                    </div>
+                </div>
+                
+                <!-- Информация -->
+                <div class="car-info">
+                    <div class="car-header">
+                        <h3 class="car-title">
+                            ${car.brand} ${car.model} 
+                            <span class="car-year">${car.year}</span>
+                        </h3>
+                        <div class="car-price">
+                            <span class="price-amount">${formattedPrice} ₽</span>
+                            <span class="price-period">/ сутки</span>
+                        </div>
+                    </div>
+                    
+                    <p class="car-description">
+                        ${car.description || `${car.brand} ${car.model} ${car.year} года. Отличное состояние.`}
+                    </p>
+                    
+                    <div class="car-specs">
+                        <div class="car-spec" title="${car.seats || 4} мест">
+                            <span class="spec-icon">👥</span>
+                            <span class="spec-value">${car.seats || 4} мест</span>
+                        </div>
+                        <div class="car-spec" title="${this.getTransmissionText(car.transmission)}">
+                            <span class="spec-icon">⚙️</span>
+                            <span class="spec-value">${this.getTransmissionText(car.transmission)}</span>
+                        </div>
+                        <div class="car-spec" title="${car.fuel_type || 'Бензин'}">
+                            <span class="spec-icon">⛽</span>
+                            <span class="spec-value">${car.fuel_type || 'Бензин'}</span>
+                        </div>
+                        <div class="car-spec" title="${car.engine_capacity || '2.0'} л">
+                            <span class="spec-icon">📏</span>
+                            <span class="spec-value">${car.engine_capacity || '2.0'} л</span>
+                        </div>
+                    </div>
+                    
+                    <div class="car-actions">
+                        <button class="car-book-btn" 
+                                onclick="fleetManager.bookCar(${car.id})" 
+                                ${car.status !== 'available' ? 'disabled' : ''}
+                                title="${car.status !== 'available' ? 'Автомобиль недоступен' : 'Забронировать'}">
+                            <span class="btn-icon">📅</span>
+                            <span class="btn-text">${car.status === 'available' ? 'Забронировать' : 'Недоступен'}</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    getCategoryIcon(slug) {
+        const icons = {
+            'economy': '💰', 'comfort': '🚗', 'business': '💼', 'premium': '👑',
+            'suv': '🚙', 'sport': '🏎️', 'electric': '⚡', 'minivan': '🚐'
+        };
+        return icons[slug] || '🚘';
+    }
+
+    setupFilters() {
+        if (!this.filterButtons.length) return;
+        
+        this.filterButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.filterButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.currentFilter = btn.dataset.category;
+                this.loadCars({ category: this.currentFilter });
+            });
+        });
+    }
+
+    setupEvents() {
+        document.addEventListener('languageChange', () => {
+            this.renderCars();
+        });
+    }
+
+    getTransmissionText(transmission) {
+        const map = {
+            'automatic': 'Автомат',
+            'manual': 'Механика',
+            'cvt': 'Вариатор',
+            'semi_automatic': 'Робот'
+        };
+        return map[transmission] || transmission || 'Автомат';
+    }
+
+    getStatusText(status) {
+        const map = {
+            'available': 'Доступен',
+            'rented': 'Арендован',
+            'maintenance': 'Обслуживание',
+            'reserved': 'Забронирован',
+            'unavailable': 'Недоступен'
+        };
+        return map[status] || status || 'Неизвестно';
+    }
+
+    // === ДЕМО ДАННЫЕ (Cloudinary версия) ===
+    getMockCategories() {
+        return [
+            { id: 1, name: "Эконом", slug: "economy", description: "Бюджетные автомобили" },
+            { id: 2, name: "Комфорт", slug: "comfort", description: "Автомобили среднего класса" },
+            { id: 3, name: "Бизнес", slug: "business", description: "Автомобили для деловых поездок" },
+            { id: 4, name: "Премиум", slug: "premium", description: "Люкс автомобили" },
+            { id: 5, name: "Внедорожник", slug: "suv", description: "Внедорожники и кроссоверы" }
+        ];
+    }
+
+    async getCloudinaryDemoCars() {
+        try {
+            const response = await fetch('/api/cars');
+            if (response.ok) {
+                const cars = await response.json();
+                console.log('✅ Получили данные из API:', cars.length);
+                return cars;
+            }
+        } catch (error) {
+            console.log('API не доступен, используем Cloudinary демо данные');
+        }
+        
+        // Fallback: демо данные с Cloudinary URL
+        return [
+            {
+                id: 1,
+                brand: "Mercedes-Benz",
+                model: "S-Class",
+                year: 2023,
+                category_id: 4,
+                engine_capacity: 3.0,
+                horsepower: 435,
+                fuel_type: "бензин",
+                transmission: "automatic",
+                doors: 4,
+                seats: 5,
+                color: "черный",
+                daily_price: 12000,
+                mileage: 5000,
+                features: ["массаж сидений", "вентиляция", "панорамная крыша"],
+                images: ["https://res.cloudinary.com/demo/image/upload/v1588016089/samples/mercedes-s-class.jpg"],
+                thumbnail: "https://res.cloudinary.com/demo/image/upload/w_400,h_300,c_fill,q_auto,f_webp/v1588016089/samples/mercedes-s-class.jpg",
+                description: "Mercedes-Benz S-Class 2023",
+                status: "available"
             },
-            fallbacks=[CommandHandler("cancel", cancel)],
-            per_message=False
-        )
-        
-        application.add_handler(conv_handler)
-        
-        # Обработчик ошибок
-        application.add_error_handler(error_handler)
-        
-        print("✅ Приложение создано")
-        print("✅ Зарегистрированы команды:")
-        print("   • /debug - отладка")
-        print("   • /start - начало работы")
-        print("   • /status - статус системы")
-        print("   • /list_cars - список авто")
-        print("   • /delete_car <id> - удалить авто")
-        print("   • /edit_car <id> <поле> <значение> - редактировать")
-        print("   • /check_photos - проверить фото в БД")
-        print("   • /add_car - добавить авто")
-        print("   • /cancel - отмена")
-        print("\n🔄 Запуск polling...")
-        print("📱 Отправьте /debug боту для проверки")
-        print("=" * 60 + "\n")
-        
-        # Запускаем бота
-        application.run_polling(
-            drop_pending_updates=True,
-            allowed_updates=None
-        )
-        
-    except Exception as e:
-        logger.error(f"❌ Ошибка запуска бота: {e}")
-        print(f"\n❌ КРИТИЧЕСКАЯ ОШИБКА:")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+            {
+                id: 2,
+                brand: "BMW",
+                model: "X7",
+                year: 2024,
+                category_id: 5,
+                engine_capacity: 4.4,
+                horsepower: 530,
+                fuel_type: "бензин",
+                transmission: "automatic",
+                doors: 5,
+                seats: 7,
+                color: "белый",
+                daily_price: 15000,
+                mileage: 3000,
+                features: ["третий ряд сидений", "панорамная крыша"],
+                images: ["https://res.cloudinary.com/demo/image/upload/v1588016089/samples/bmw-x7.jpg"],
+                thumbnail: "https://res.cloudinary.com/demo/image/upload/w_400,h_300,c_fill,q_auto,f_webp/v1588016089/samples/bmw-x7.jpg",
+                description: "BMW X7 2024",
+                status: "available"
+            }
+        ];
+    }
 
-# ========== ТОЧКА ВХОДА ==========
-if __name__ == "__main__":
-    print("🔧 Прямой запуск бота (production)...")
-    start_bot()
+    createNoCarsMessage() {
+        return `
+            <div class="no-cars-message" data-aos="fade-up">
+                <div class="no-cars-icon">🚗</div>
+                <h3>Автомобили не найдены</h3>
+                <p class="subtext">Попробуйте изменить фильтры</p>
+                <button class="retry-btn" onclick="fleetManager.loadCars({ category: fleetManager.currentFilter })">
+                    <span class="btn-icon">🔄</span>
+                    Загрузить снова
+                </button>
+            </div>
+        `;
+    }
+
+    showLoading() {
+        if (!this.carsGrid) return;
+        this.carsGrid.innerHTML = `
+            <div class="loading-cars">
+                <div class="spinner"></div>
+                <p>Загрузка автомобилей...</p>
+            </div>
+        `;
+    }
+
+    showError(message) {
+        if (!this.carsGrid) return;
+        this.carsGrid.innerHTML = `
+            <div class="error-message" data-aos="fade-up">
+                <div class="error-icon">⚠️</div>
+                <h3>Ошибка загрузки</h3>
+                <p>${message}</p>
+                <button class="retry-btn" onclick="fleetManager.startLoading()">
+                    <span class="btn-icon">🔄</span>
+                    Повторить попытку
+                </button>
+            </div>
+        `;
+    }
+
+    // === ПУБЛИЧНЫЕ МЕТОДЫ ===
+    showCarDetails(carId) {
+        const car = this.cars.find(c => c.id == carId);
+        if (!car) return;
+        alert(`${car.brand} ${car.model} ${car.year}\nЦена: ${car.daily_price} ₽/сутки\nСтатус: ${this.getStatusText(car.status)}`);
+    }
+
+    bookCar(carId) {
+        const car = this.cars.find(c => c.id == carId);
+        if (!car) return;
+        
+        if (car.status !== 'available') {
+            this.showNotification('error', 'Этот автомобиль сейчас недоступен для бронирования');
+            return;
+        }
+        
+        // Открываем форму бронирования
+        this.openBookingForm(car);
+    }
+
+    showNotification(type, message) {
+        const notification = document.createElement('div');
+        notification.className = 'notification';
+        notification.innerHTML = `
+            <span class="notification-icon">${type === 'error' ? '❌' : '⚠️'}</span>
+            <span class="notification-text">${message}</span>
+        `;
+        
+        document.body.appendChild(notification);
+        setTimeout(() => notification.classList.add('show'), 10);
+        setTimeout(() => {
+            notification.classList.remove('show');
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
+}
+
+// Глобальный экземпляр
+window.fleetManager = new FleetManager();
+
+// Глобальные функции
+window.initFleetManager = () => window.fleetManager.init();
+window.showCarDetails = (id) => window.fleetManager.showCarDetails(id);
+window.bookCar = (id) => window.fleetManager.bookCar(id);
