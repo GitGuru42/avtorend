@@ -8,6 +8,8 @@ class CarAPI {
         // ✅ CLOUDINARY: Конфигурация для обработки изображений
         this.cloudinaryConfig = {
             baseUrl: 'https://res.cloudinary.com',
+            // ✅ ВАЖНО: ЗАМЕНИТЕ 'YOUR_CLOUD_NAME' НА ВАШ РЕАЛЬНЫЙ CLOUD NAME!
+            cloudName: 'daxfsz15l', // ← ЗАМЕНИТЕ ЭТО НА ВАШ CLOUD NAME!
             transformations: {
                 thumbnail: 'w_400,h_300,c_fill,q_auto,f_webp',
                 card: 'w_800,h_600,c_fill,q_auto,f_webp',
@@ -35,6 +37,20 @@ class CarAPI {
             timeout: 10000, // 10 секунд
             useCache: true,
         };
+        
+        // Проверка Cloudinary конфигурации
+        this.checkCloudinaryConfig();
+    }
+    
+    checkCloudinaryConfig() {
+        const cloudName = this.cloudinaryConfig.cloudName;
+        if (!cloudName || cloudName === 'ваш_cloud_name_здесь') {
+            console.warn('⚠️ ВНИМАНИЕ: Cloudinary cloud_name не настроен!');
+            console.warn('   Замените "ваш_cloud_name_здесь" на ваш реальный Cloud Name из Cloudinary Console');
+            console.warn('   Зайдите на https://cloudinary.com/console и найдите "Cloud Name"');
+        } else {
+            console.log(`✅ Cloudinary настроен с cloud_name: ${cloudName}`);
+        }
     }
     
     detectApiUrl() {
@@ -78,6 +94,14 @@ class CarAPI {
         return url && typeof url === 'string' && url.includes('res.cloudinary.com');
     }
     
+    // ✅ НОВЫЙ: Проверка является ли URL вашего Cloudinary
+    isOurCloudinaryUrl(url) {
+        const cloudName = this.cloudinaryConfig.cloudName;
+        return url && typeof url === 'string' && 
+               url.includes('res.cloudinary.com') && 
+               url.includes(`/${cloudName}/`);
+    }
+    
     // ✅ НОВЫЙ: Оптимизация Cloudinary URL с параметрами
     optimizeCloudinaryUrl(url, size = 'card') {
         if (!this.isCloudinaryUrl(url)) {
@@ -107,12 +131,18 @@ class CarAPI {
             
             if (isVersion) {
                 // URL уже имеет версию: /upload/v123456/...
-                // Добавляем трансформацию перед версией
-                pathParts.splice(versionIndex, 0, transformations);
+                // Проверяем, есть ли уже трансформации
+                if (!pathParts[versionIndex - 1].includes('w_')) {
+                    // Добавляем трансформацию перед версией
+                    pathParts.splice(versionIndex, 0, transformations);
+                }
             } else {
                 // URL без версии: /upload/...
-                // Добавляем трансформацию после upload
-                pathParts.splice(uploadIndex + 1, 0, transformations);
+                // Проверяем, есть ли уже трансформации
+                if (!pathParts[uploadIndex + 1].includes('w_')) {
+                    // Добавляем трансформацию после upload
+                    pathParts.splice(uploadIndex + 1, 0, transformations);
+                }
             }
             
             urlObj.pathname = pathParts.join('/');
@@ -124,19 +154,97 @@ class CarAPI {
         }
     }
     
-    // ✅ НОВЫЙ: Получение Cloudinary URL с fallback
-    getCloudinaryImageWithFallback(imageUrl, size = 'card') {
+    // ✅ ПЕРЕРАБОТАННЫЙ: Получение Cloudinary URL с поддержкой структуры папок /avtorend/
+    getCloudinaryImageWithFallback(imageUrl, size = 'card', car = null) {
         if (!imageUrl) {
             return this.getDefaultCarImage();
         }
         
-        // Если это Cloudinary URL, оптимизируем его
+        console.log('📁 Обрабатываем изображение:', imageUrl.substring(0, 100));
+        
+        // ✅ ВАЖНО: Ваш Cloudinary cloud_name
+        const cloudName = this.cloudinaryConfig.cloudName;
+        
+        // ✅ 1. Если это уже Cloudinary URL (ваш или demo)
         if (this.isCloudinaryUrl(imageUrl)) {
+            console.log('☁️ Обнаружен Cloudinary URL');
+            
+            // Проверяем, это demo или ваш аккаунт?
+            if (imageUrl.includes('/demo/')) {
+                console.warn('⚠️ Обнаружен DEMO URL Cloudinary');
+                // Заменяем demo на ваш cloud_name
+                imageUrl = imageUrl.replace('/demo/', `/${cloudName}/`);
+            }
+            
+            // Проверяем, содержит ли URL ваш cloud_name
+            if (!imageUrl.includes(`/${cloudName}/`)) {
+                console.warn(`⚠️ Cloudinary URL не содержит ваш cloud_name "${cloudName}"`);
+                console.warn(`   URL содержит: ${imageUrl.split('/')[3]}`);
+                
+                // Пытаемся исправить URL
+                const urlParts = imageUrl.split('/');
+                const cloudIndex = urlParts.indexOf('cloudinary.com') + 1;
+                if (cloudIndex > 0 && urlParts[cloudIndex]) {
+                    urlParts[cloudIndex] = cloudName;
+                    imageUrl = urlParts.join('/');
+                    console.log('✅ Исправленный URL:', imageUrl);
+                }
+            }
+            
             return this.optimizeCloudinaryUrl(imageUrl, size);
         }
         
-        // Если это локальный путь
-        if (imageUrl.startsWith('/static/')) {
+        // ✅ 2. Если это путь в папке /avtorend/ (ваша структура)
+        // Пример: "avtorend/mercedes-s-class-1/main.jpg"
+        // Или: "/avtorend/bmw-x5-2/interior.jpg"
+        if (imageUrl.includes('avtorend/')) {
+            console.log('📂 Обнаружен путь в папке avtorend:', imageUrl);
+            
+            // Убираем ведущий слэш если есть
+            let publicId = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
+            
+            // Удаляем расширение файла для Cloudinary
+            publicId = publicId.replace(/\.(jpg|jpeg|png|webp|gif)$/i, '');
+            
+            // Формируем Cloudinary URL
+            const transformation = this.cloudinaryConfig.transformations[size] || '';
+            const baseUrl = `https://res.cloudinary.com/${cloudName}/image/upload`;
+            
+            const result = transformation ? 
+                `${baseUrl}/${transformation}/${publicId}` :
+                `${baseUrl}/${publicId}`;
+            
+            console.log('✅ Сформирован Cloudinary URL:', result.substring(0, 100));
+            return result;
+        }
+        
+        // ✅ 3. Если это только имя файла (например: "main.jpg")
+        // Используем данные автомобиля для построения пути
+        if (!imageUrl.includes('/') && imageUrl.includes('.') && car) {
+            console.log('📄 Обнаружено только имя файла, используем данные авто');
+            
+            // Генерируем имя папки на основе бренда, модели и ID
+            const folderName = this.generateCarFolderName(car);
+            const fileName = imageUrl.replace(/\.(jpg|jpeg|png|webp|gif)$/i, '');
+            
+            // Формируем public_id для Cloudinary: avtorend/{folder}/{file}
+            const publicId = `avtorend/${folderName}/${fileName}`;
+            
+            // Формируем Cloudinary URL
+            const transformation = this.cloudinaryConfig.transformations[size] || '';
+            const baseUrl = `https://res.cloudinary.com/${cloudName}/image/upload`;
+            
+            const result = transformation ? 
+                `${baseUrl}/${transformation}/${publicId}` :
+                `${baseUrl}/${publicId}`;
+            
+            console.log('✅ Сгенерирован URL на основе данных авто:', result.substring(0, 100));
+            return result;
+        }
+        
+        // ✅ 4. Если это локальный путь
+        if (imageUrl.startsWith('/static/') || imageUrl.startsWith('/uploads/')) {
+            console.log('🌐 Обнаружен локальный путь');
             // Для продакшена на Render добавляем origin
             if (window.location.hostname.includes('onrender.com')) {
                 return window.location.origin + imageUrl;
@@ -144,42 +252,63 @@ class CarAPI {
             return imageUrl;
         }
         
-        // Если только имя файла
-        if (!imageUrl.includes('/') && imageUrl.includes('.')) {
-            const fullUrl = `/static/uploads/cars/${imageUrl}`;
-            if (window.location.hostname.includes('onrender.com')) {
-                return window.location.origin + fullUrl;
-            }
-            return fullUrl;
-        }
-        
-        // Любой другой случай
-        return this.getDefaultCarImage();
+        // ✅ 5. Любой другой случай - возвращаем placeholder
+        console.log('⚠️ Неизвестный формат, используем placeholder');
+        return this.getDefaultCarImage(size);
     }
     
-    // ✅ ОБНОВЛЕННЫЙ: Получение изображения автомобиля
+    // ✅ НОВЫЙ: Генерация имени папки для автомобиля
+    generateCarFolderName(car) {
+        if (!car) return 'unknown';
+        
+        // Создаем имя папки: brand-model-id
+        // Пример: mercedes-s-class-1, bmw-x5-2
+        const brandSlug = car.brand ? 
+            car.brand.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') : 
+            'unknown';
+        const modelSlug = car.model ? 
+            car.model.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') : 
+            'unknown';
+        const carId = car.id || '0';
+        
+        return `${brandSlug}-${modelSlug}-${carId}`;
+    }
+    
+    // ✅ ОБНОВЛЕННЫЙ: Получение изображения автомобиля с поддержкой структуры папок
     getCarImageUrl(car, index = 0, size = 'card') {
         if (!car) {
             return this.getDefaultCarImage();
         }
+        
+        console.log(`🚗 Получаем фото для: ${car.brand} ${car.model} (ID: ${car.id}, индекс: ${index})`);
         
         let imageUrl = null;
         
         // 1. Пытаемся получить изображение по индексу из массива images
         if (car.images && Array.isArray(car.images) && car.images.length > index) {
             imageUrl = car.images[index];
+            console.log('📸 Используем изображение из массива:', imageUrl);
         }
         // 2. Или используем thumbnail
         else if (car.thumbnail) {
             imageUrl = car.thumbnail;
+            console.log('📸 Используем thumbnail:', imageUrl);
         }
-        // 3. Или дефолтное изображение
+        // 3. Формируем путь на основе данных автомобиля
         else {
-            return this.getDefaultCarImage(size);
+            console.log('📸 Изображение не найдено, формируем путь на основе данных авто');
+            
+            // Генерируем имя папки
+            const folderName = this.generateCarFolderName(car);
+            const fileName = 'main'; // Главное фото по умолчанию
+            
+            // Формируем public_id для Cloudinary: avtorend/{folder}/{file}
+            imageUrl = `avtorend/${folderName}/${fileName}`;
+            console.log('📁 Сгенерированный путь:', imageUrl);
         }
         
         // Обрабатываем URL в зависимости от источника
-        return this.getCloudinaryImageWithFallback(imageUrl, size);
+        return this.getCloudinaryImageWithFallback(imageUrl, size, car);
     }
     
     // ✅ ОБНОВЛЕННЫЙ: Получение всех изображений автомобиля
@@ -188,26 +317,44 @@ class CarAPI {
             return [this.getDefaultCarImage(size)];
         }
         
-        return car.images.map(img => this.getCloudinaryImageWithFallback(img, size));
+        return car.images.map((img, index) => 
+            this.getCloudinaryImageWithFallback(img, size, car)
+        );
     }
     
-    // ✅ ОБНОВЛЕННЫЙ: Получение дефолтного изображения
+    // ✅ ОБНОВЛЕННЫЙ: Получение дефолтного изображения с вашей структурой
     getDefaultCarImage(size = 'card') {
-        // Cloudinary демо изображения (всегда доступны)
+        const cloudName = this.cloudinaryConfig.cloudName;
+        
+        // Если cloud_name не указан, используем статичные placeholder
+        if (!cloudName || cloudName === 'ваш_cloud_name_здесь') {
+            console.warn('⚠️ Cloudinary cloud_name не настроен! Используем статичные placeholder');
+            const staticPlaceholders = {
+                card: '/static/uploads/cars/placeholder.jpg',
+                thumbnail: '/static/uploads/cars/placeholder-thumb.jpg',
+                gallery: '/static/uploads/cars/placeholder-large.jpg'
+            };
+            
+            // Для продакшена на Render добавляем origin
+            if (window.location.hostname.includes('onrender.com')) {
+                return Object.fromEntries(
+                    Object.entries(staticPlaceholders).map(([key, value]) => 
+                        [key, window.location.origin + value]
+                    )
+                )[size] || window.location.origin + staticPlaceholders.card;
+            }
+            
+            return staticPlaceholders[size] || staticPlaceholders.card;
+        }
+        
+        // ✅ Cloudinary изображения с ВАШИМ cloud_name и структурой папок
+        // Предполагаем, что у вас есть placeholder в папке /avtorend/placeholder/
         const cloudinaryImages = {
-            card: 'https://res.cloudinary.com/demo/image/upload/w_800,h_600,c_fill,q_auto,f_webp/v1588016089/samples/car.jpg',
-            thumbnail: 'https://res.cloudinary.com/demo/image/upload/w_400,h_300,c_fill,q_auto,f_webp/v1588016089/samples/automotive.jpg',
-            gallery: 'https://res.cloudinary.com/demo/image/upload/w_1200,h_800,c_limit,q_auto,f_webp/v1588016089/samples/road-trip.jpg'
+            card: `https://res.cloudinary.com/${cloudName}/image/upload/w_800,h_600,c_fill,q_auto,f_webp/avtorend/placeholder/car`,
+            thumbnail: `https://res.cloudinary.com/${cloudName}/image/upload/w_400,h_300,c_fill,q_auto,f_webp/avtorend/placeholder/car`,
+            gallery: `https://res.cloudinary.com/${cloudName}/image/upload/w_1200,h_800,c_limit,q_auto,f_webp/avtorend/placeholder/car`
         };
         
-        // Локальные fallback (если нужны)
-        const localImages = {
-            card: '/static/uploads/cars/placeholder.jpg',
-            thumbnail: '/static/uploads/cars/placeholder-thumb.jpg',
-            gallery: '/static/uploads/cars/placeholder-large.jpg'
-        };
-        
-        // Используем Cloudinary для надежности
         return cloudinaryImages[size] || cloudinaryImages.card;
     }
     
@@ -223,7 +370,6 @@ class CarAPI {
             
             if (cache.timestamp + cache.ttl > now) {
                 console.log('📦 Используем кэшированные данные автомобилей');
-                // ✅ ОБРАБАТЫВАЕМ Cloudinary URL в кэшированных данных
                 return this.processCarsWithCloudinary(this.filterCars(cache.data, filters));
             }
         }
@@ -248,12 +394,24 @@ class CarAPI {
             
             // ✅ ЛОГИРУЕМ Cloudinary URL для отладки
             if (data.length > 0) {
+                const firstCar = data[0];
                 console.log('☁️ Первый автомобиль в ответе:');
-                console.log('   Бренд:', data[0].brand);
-                console.log('   Изображения:', data[0].images);
-                console.log('   Первое изображение URL:', data[0].images?.[0]);
-                console.log('   Это Cloudinary?', this.isCloudinaryUrl(data[0].images?.[0]));
-                console.log('   Оптимизированный URL:', this.getCarImageUrl(data[0]));
+                console.log('   ID:', firstCar.id);
+                console.log('   Бренд:', firstCar.brand);
+                console.log('   Модель:', firstCar.model);
+                console.log('   Изображения:', firstCar.images);
+                
+                if (firstCar.images && firstCar.images.length > 0) {
+                    const firstImage = firstCar.images[0];
+                    console.log('   Первое изображение URL:', firstImage);
+                    console.log('   Это Cloudinary?', this.isCloudinaryUrl(firstImage));
+                    console.log('   Это наш Cloudinary?', this.isOurCloudinaryUrl(firstImage));
+                    
+                    // Показываем обработанный URL
+                    const processedUrl = this.getCarImageUrl(firstCar);
+                    console.log('   Обработанный URL:', processedUrl);
+                    console.log('   Содержит наш cloud_name?', processedUrl.includes(this.cloudinaryConfig.cloudName));
+                }
             }
             
             // Кэшируем результат
@@ -276,7 +434,6 @@ class CarAPI {
             // Если есть кэш, вернуть его даже если просрочен
             if (this.cache.cars.data) {
                 console.log('⚠️ Используем просроченный кэш как fallback');
-                // ✅ ОБРАБАТЫВАЕМ Cloudinary URL в кэше
                 return this.processCarsWithCloudinary(this.filterCars(this.cache.cars.data, filters));
             }
             
@@ -296,14 +453,14 @@ class CarAPI {
             
             // Обрабатываем массив изображений
             if (processedCar.images && Array.isArray(processedCar.images)) {
-                processedCar.images = processedCar.images.map(img => 
-                    this.getCloudinaryImageWithFallback(img, 'card')
+                processedCar.images = processedCar.images.map((img, index) => 
+                    this.getCloudinaryImageWithFallback(img, 'card', car)
                 );
             }
             
             // Обрабатываем thumbnail
             if (processedCar.thumbnail) {
-                processedCar.thumbnail = this.getCloudinaryImageWithFallback(processedCar.thumbnail, 'thumbnail');
+                processedCar.thumbnail = this.getCloudinaryImageWithFallback(processedCar.thumbnail, 'thumbnail', car);
             }
             
             return processedCar;
@@ -632,17 +789,51 @@ window.cloudinaryHelpers = {
     },
     
     // Получение оптимизированного URL
-    getOptimizedImageUrl: (url, width = 800, height = 600) => {
+    getOptimizedImageUrl: (url, car = null) => {
         if (!window.carAPI) return url;
-        return window.carAPI.getCloudinaryImageWithFallback(url, 'card');
+        return window.carAPI.getCloudinaryImageWithFallback(url, 'card', car);
     },
     
     // Fallback для ошибок изображений
-    handleImageError: (imgElement) => {
+    handleImageError: (imgElement, car = null) => {
         if (imgElement) {
             console.warn('❌ Ошибка загрузки изображения:', imgElement.src);
             imgElement.onerror = null;
-            imgElement.src = window.carAPI ? window.carAPI.getDefaultCarImage() : '/static/uploads/cars/placeholder.jpg';
+            imgElement.src = window.carAPI ? 
+                window.carAPI.getDefaultCarImage('card') : 
+                '/static/uploads/cars/placeholder.jpg';
         }
     }
+};
+
+// ✅ НОВОЕ: Отладка Cloudinary
+window.debugCloudinary = function() {
+    console.log('🔍 Cloudinary Debug Info:');
+    console.log('   Cloud Name:', window.carAPI.cloudinaryConfig.cloudName);
+    console.log('   API URL:', window.carAPI.baseUrl);
+    
+    // Проверяем API
+    fetch('/api/cars')
+        .then(r => r.json())
+        .then(cars => {
+            if (cars.length > 0) {
+                const car = cars[0];
+                console.log('   Первая машина:', {
+                    id: car.id,
+                    brand: car.brand,
+                    model: car.model,
+                    images: car.images,
+                    thumbnail: car.thumbnail
+                });
+                
+                if (car.images && car.images.length > 0) {
+                    const originalUrl = car.images[0];
+                    const processedUrl = window.carAPI.getCarImageUrl(car);
+                    console.log('   Оригинальный URL:', originalUrl);
+                    console.log('   Обработанный URL:', processedUrl);
+                    console.log('   Разница:', originalUrl !== processedUrl ? 'ДА' : 'НЕТ');
+                }
+            }
+        })
+        .catch(err => console.log('   API не доступен:', err));
 };
