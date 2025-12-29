@@ -1,6 +1,6 @@
 # render.yaml - Production Configuration for AvtoRend
 services:
-  - type: web
+  - type: worker
     name: avtorend-api
     env: python
     region: frankfurt
