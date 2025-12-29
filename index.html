@@ -220,38 +220,35 @@
     </section>
 
     <!-- Fleet Section -->
-    <section id="fleet" class="fleet">
-        <div class="container">
-            <div class="section-header" data-aos="fade-up">
-                <h2 class="section-title" data-i18n="fleet.title">Наш автопарк</h2>
-                <p class="section-subtitle" data-i18n="fleet.subtitle">Выберите автомобиль для вашего следующего путешествия</p>
-            </div>
+<section id="fleet" class="fleet">
+    <div class="container">
+        <div class="section-header" data-aos="fade-up">
+            <h2 class="section-title" data-i18n="fleet.title">Наш автопарк</h2>
+            <p class="section-subtitle" data-i18n="fleet.subtitle">Выберите автомобиль для вашего следующего путешествия</p>
+        </div>
 
-            <!-- Filters -->
-            <div class="fleet-filters" data-aos="fade-up" data-aos-delay="100">
-                <button class="filter-btn active" data-category="all" data-i18n="fleet.filters.all">Все</button>
-                <button class="filter-btn" data-category="business" data-i18n="fleet.filters.business">Бизнес-класс</button>
-                <button class="filter-btn" data-category="premium" data-i18n="fleet.filters.premium">Премиум</button>
-                <button class="filter-btn" data-category="suv" data-i18n="fleet.filters.suv">Внедорожники</button>
-                <button class="filter-btn" data-category="sport" data-i18n="fleet.filters.sport">Спорткары</button>
-            </div>
+        <!-- ✅ ИЗМЕНЕНО: Фильтры будут созданы динамически через JavaScript -->
+        <div class="fleet-filters" data-aos="fade-up" data-aos-delay="100">
+            <!-- Кнопки фильтров создаются через fleet-manager.js -->
+            <!-- "Все" и категории из базы данных -->
+        </div>
 
-            <!-- Cars Grid -->
-            <div class="cars-grid" id="carsGrid">
-                <!-- Автомобили загружаются через JavaScript -->
-                <div class="loading-cars">
-                    <div class="spinner"></div>
-                    <p data-i18n="fleet.loading">Загружаем автомобили...</p>
-                </div>
-            </div>
-            
-            <!-- ✅ ДОБАВЛЕНО: Сообщение об ошибке API -->
-            <div class="api-error-message" id="apiErrorMessage" style="display: none;">
-                <p>⚠️ Не удалось загрузить автомобили. Пожалуйста, проверьте подключение к интернету и обновите страницу.</p>
-                <button onclick="location.reload()">Обновить страницу</button>
+        <!-- Cars Grid -->
+        <div class="cars-grid" id="carsGrid">
+            <!-- Автомобили загружаются через JavaScript -->
+            <div class="loading-cars">
+                <div class="spinner"></div>
+                <p data-i18n="fleet.loading">Загружаем автомобили...</p>
             </div>
         </div>
-    </section>
+        
+        <!-- ✅ ДОБАВЛЕНО: Сообщение об ошибке API -->
+        <div class="api-error-message" id="apiErrorMessage" style="display: none;">
+            <p>⚠️ Не удалось загрузить автомобили. Пожалуйста, проверьте подключение к интернету и обновите страницу.</p>
+            <button onclick="location.reload()">Обновить страницу</button>
+        </div>
+    </div>
+</section>
 
     <!-- About Section -->
     <section id="about" class="about">
