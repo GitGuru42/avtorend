@@ -8,6 +8,9 @@ class FleetManager {
         this.categories = [];
         this.isLoading = false;
         
+        // ✅ ДОБАВЛЕНО: Флаг для предотвращения рекурсии
+        this.isProcessingFilter = false;
+        
         this.init();
     }
 
@@ -25,9 +28,6 @@ class FleetManager {
             
             // 3. Загружаем автомобили (все по умолчанию)
             await this.loadCars({});
-            
-            // 4. Настраиваем события
-            this.setupEvents();
             
             console.log('✅ FleetManager инициализирован с динамическими фильтрами');
             
@@ -86,6 +86,7 @@ class FleetManager {
     createFilterButton(categoryId, text, icon) {
         const button = document.createElement('button');
         button.className = 'filter-btn';
+        button.type = 'button'; // ✅ ВАЖНО: Предотвращаем отправку формы
         button.dataset.categoryId = categoryId;
         button.innerHTML = `
             ${icon ? `<span class="filter-icon">${icon}</span>` : ''}
@@ -97,64 +98,97 @@ class FleetManager {
             button.classList.add('active');
         }
         
-        // Добавляем обработчик клика
-        button.addEventListener('click', () => this.handleFilterClick(categoryId, button));
+        // ✅ ИСПРАВЛЕНО: Делегирование событий
+        button.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.handleFilterClick(categoryId);
+        });
         
         return button;
     }
 
-    // ✅ НОВЫЙ МЕТОД: Обработка клика по фильтру
-    handleFilterClick(categoryId, button) {
-        // Обновляем активную кнопку
+    // ✅ ИСПРАВЛЕННЫЙ МЕТОД: Обработка клика по фильтру
+    async handleFilterClick(categoryId) {
+        // ✅ Проверяем, не идет ли уже обработка
+        if (this.isProcessingFilter) {
+            console.log('⚠️ Фильтрация уже выполняется, пропускаем клик');
+            return;
+        }
+        
+        // ✅ Обновляем активную кнопку
         const allButtons = this.filtersContainer.querySelectorAll('.filter-btn');
         allButtons.forEach(btn => btn.classList.remove('active'));
-        button.classList.add('active');
         
-        // Сохраняем текущую категорию
+        const activeButton = this.filtersContainer.querySelector(`[data-category-id="${categoryId}"]`);
+        if (activeButton) {
+            activeButton.classList.add('active');
+        }
+        
+        // ✅ Сохраняем текущую категорию
         this.currentCategoryId = categoryId;
         
-        // Загружаем автомобили с фильтром
-        if (categoryId === 'all') {
-            this.loadCars({});
-        } else {
-            this.loadCars({ category_id: parseInt(categoryId) });
-        }
-        
-        // Прокручиваем к началу списка
-        if (this.carsGrid) {
-            this.carsGrid.scrollIntoView({ 
-                behavior: 'smooth', 
-                block: 'start' 
-            });
-        }
-        
         console.log(`🎯 Применен фильтр: ${categoryId === 'all' ? 'Все автомобили' : 'Категория ID ' + categoryId}`);
+        
+        // ✅ Загружаем автомобили с фильтром
+        await this.filterCarsByCategory(categoryId);
+    }
+
+    // ✅ НОВЫЙ МЕТОД: Фильтрация автомобилей по категории
+    async filterCarsByCategory(categoryId) {
+        if (this.isProcessingFilter) {
+            return;
+        }
+        
+        this.isProcessingFilter = true;
+        
+        try {
+            // Показываем индикатор загрузки
+            this.showSkeleton();
+            
+            if (categoryId === 'all') {
+                await this.loadCars({});
+            } else {
+                await this.loadCars({ category_id: parseInt(categoryId) });
+            }
+            
+        } catch (error) {
+            console.error('❌ Ошибка фильтрации:', error);
+            this.showNotification('error', 'Не удалось применить фильтр');
+        } finally {
+            this.isProcessingFilter = false;
+        }
     }
 
     async loadCars(filters = {}) {
+        // ✅ Проверяем, не идет ли уже загрузка
+        if (this.isLoading) {
+            console.log('⚠️ Загрузка уже выполняется');
+            return;
+        }
+        
         this.isLoading = true;
         
         try {
-            // Показываем скелетоны загрузки
-            this.showSkeleton();
-            
             // Используем API если доступен
             if (window.carAPI) {
                 this.cars = await window.carAPI.getCars(filters);
                 console.log('🚗 Загружены автомобили с фильтром:', filters, 'Количество:', this.cars.length);
             } else {
                 // Используем демо данные с фильтрацией
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                this.cars = this.getCarsFromBotDatabase();
+                await new Promise(resolve => setTimeout(resolve, 500)); // ✅ Уменьшили время для демо
+                const allCars = this.getCarsFromBotDatabase();
                 
                 // Применяем фильтрацию локально для демо
                 if (filters.category_id) {
-                    this.cars = this.cars.filter(car => car.category_id === filters.category_id);
+                    this.cars = allCars.filter(car => car.category_id === filters.category_id);
+                } else {
+                    this.cars = allCars;
                 }
                 console.log('🚗 Используем демо данные:', this.cars.length);
             }
             
-            // Отрисовываем автомобили
+            // ✅ Отрисовываем автомобили
             this.renderCars();
             
         } catch (error) {
@@ -227,6 +261,9 @@ class FleetManager {
     showSkeleton() {
         if (!this.carsGrid) return;
         
+        // ✅ Очищаем контейнер
+        this.carsGrid.innerHTML = '';
+        
         const skeletonHTML = `
             <div class="car-card skeleton">
                 <div class="car-image-container skeleton-image"></div>
@@ -256,7 +293,7 @@ class FleetManager {
                     </div>
                 </div>
             </div>
-        `.repeat(6);
+        `.repeat(4);
         
         this.carsGrid.innerHTML = skeletonHTML;
     }
@@ -264,9 +301,9 @@ class FleetManager {
     renderCars() {
         if (!this.carsGrid) return;
         
+        // ✅ Проверяем, не идет ли загрузка
         if (this.isLoading) {
-            this.showSkeleton();
-            return;
+            return; // Не вызываем showSkeleton здесь
         }
         
         if (this.cars.length === 0) {
@@ -279,7 +316,11 @@ class FleetManager {
         
         // Инициализируем AOS для новых элементов
         if (window.AOS) {
-            setTimeout(() => AOS.refresh(), 100);
+            setTimeout(() => {
+                if (window.AOS) {
+                    AOS.refresh();
+                }
+            }, 100);
         }
         
         // Анимация появления
@@ -301,7 +342,6 @@ class FleetManager {
         
         // Форматируем данные
         const formattedPrice = new Intl.NumberFormat('ru-RU').format(car.daily_price || 0);
-        const formattedMileage = car.mileage ? `${car.mileage.toLocaleString('ru-RU')} км` : 'Новый';
         
         // Получаем фото
         const carImage = this.getCarImage(car);
@@ -371,7 +411,7 @@ class FleetManager {
                     <!-- Кнопки действий -->
                     <div class="car-actions">
                         <button class="car-book-btn" 
-                                onclick="fleetManager.bookCar(${car.id})" 
+                                onclick="window.fleetManager.bookCar(${car.id})" 
                                 ${car.status !== 'available' ? 'disabled' : ''}
                                 title="${car.status !== 'available' ? 'Автомобиль недоступен' : 'Забронировать'}">
                             <span class="btn-icon">📅</span>
@@ -405,13 +445,6 @@ class FleetManager {
         ];
         
         return localImages[Math.floor(Math.random() * localImages.length)];
-    }
-
-    setupEvents() {
-        // Обновление при изменении языка
-        document.addEventListener('languageChange', () => {
-            this.renderCars();
-        });
     }
 
     // === ПУБЛИЧНЫЕ МЕТОДЫ ===
@@ -506,14 +539,14 @@ class FleetManager {
             console.log('API не доступен, используем fallback');
         }
         
-        // Fallback: демо данные
+        // Fallback: демо данные для разных категорий
         return [
             {
                 id: 1,
                 brand: "Toyota",
                 model: "Camry",
                 year: 2022,
-                category_id: 2,
+                category_id: 2, // Комфорт
                 engine_capacity: 2.5,
                 horsepower: 203,
                 fuel_type: "бензин",
@@ -534,7 +567,7 @@ class FleetManager {
                 brand: "BMW",
                 model: "X5",
                 year: 2023,
-                category_id: 5,
+                category_id: 5, // Внедорожник
                 engine_capacity: 3.0,
                 horsepower: 340,
                 fuel_type: "дизель",
@@ -554,7 +587,7 @@ class FleetManager {
                 brand: "Mercedes",
                 model: "S-Class",
                 year: 2023,
-                category_id: 4,
+                category_id: 4, // Премиум
                 engine_capacity: 3.0,
                 horsepower: 435,
                 fuel_type: "бензин",
@@ -574,7 +607,7 @@ class FleetManager {
                 brand: "Audi",
                 model: "Q7",
                 year: 2022,
-                category_id: 5,
+                category_id: 5, // Внедорожник
                 engine_capacity: 3.0,
                 horsepower: 340,
                 fuel_type: "дизель",
@@ -587,6 +620,26 @@ class FleetManager {
                 images: ["/static/photos_cars/car_20241219_120000_3.jpg"],
                 thumbnail: "/static/photos_cars/car_20241219_120000_3.jpg",
                 description: "Audi Q7 2022 года",
+                status: "available"
+            },
+            {
+                id: 5,
+                brand: "Kia",
+                model: "Rio",
+                year: 2021,
+                category_id: 1, // Эконом
+                engine_capacity: 1.6,
+                horsepower: 123,
+                fuel_type: "бензин",
+                transmission: "automatic",
+                doors: 4,
+                seats: 5,
+                color: "белый",
+                daily_price: 2000,
+                mileage: 25000,
+                images: ["/static/photos_cars/default-car-1.jpg"],
+                thumbnail: "/static/photos_cars/default-car-1.jpg",
+                description: "Kia Rio 2021 года",
                 status: "available"
             }
         ];
@@ -602,7 +655,7 @@ class FleetManager {
                 <div class="no-cars-icon">🚗</div>
                 <h3>Автомобили не найдены</h3>
                 <p class="subtext">К сожалению, нет доступных автомобилей ${categoryName}.</p>
-                <button class="retry-btn" onclick="fleetManager.loadCars({})">
+                <button class="retry-btn" onclick="window.fleetManager.handleFilterClick('all')">
                     <span class="btn-icon">🔄</span>
                     Показать все автомобили
                 </button>
@@ -629,7 +682,7 @@ class FleetManager {
                 <div class="error-icon">⚠️</div>
                 <h3>Ошибка загрузки</h3>
                 <p>${message}</p>
-                <button class="retry-btn" onclick="fleetManager.init()">
+                <button class="retry-btn" onclick="window.fleetManager.init()">
                     <span class="btn-icon">🔄</span>
                     Повторить попытку
                 </button>
