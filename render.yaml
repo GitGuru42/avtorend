@@ -1,41 +1,45 @@
-# render.yaml - Production Configuration for AvtoRend
+# render.yaml - ДВА отдельных сервиса
 services:
-  - type: worker
-    name: avtorend-api
+  # 1. WEB SERVICE (API + Frontend) - будет слушать порт
+  - type: web
+    name: avtorend-web
     env: python
     region: frankfurt
     plan: free
-    branch: main
-    
     buildCommand: |
-      pip install --upgrade pip
-      pip install -r requirements.txt
+      pip install -r api/requirements.txt
       mkdir -p static/uploads/cars
       mkdir -p static/uploads/temp
-
-    # Для FastAPI:
-    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
-    
-    # ИЛИ для Flask/Django:
-    # startCommand: gunicorn main:app --workers 1 --bind 0.0.0.0:$PORT
-
+    startCommand: cd api && uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.0"
       - key: ENVIRONMENT
         value: production
-      - key: DEBUG
-        value: "false"
-      - key: SECRET_KEY
-        generateValue: true
       - key: DATABASE_URL
         sync: false
       - key: ALLOWED_ORIGINS
-        value: "http://localhost:3000,http://localhost:5173"
-      - key: PORT
-        value: "10000"
-      - key: WEB_CONCURRENCY
-        value: "1"
+        value: "*"
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    staticPublishPath: ./
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=3600
 
-    autoDeploy: true
-    pullRequestPreviewsEnabled: false
+  # 2. BACKGROUND WORKER (ТОЛЬКО Telegram бот) - не слушает порт
+  - type: worker
+    name: avtorend-telegram-bot
+    env: python
+    region: frankfurt
+    plan: free
+    buildCommand: cd api && pip install -r requirements.txt
+    startCommand: cd api && python telegram_bot.py
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
