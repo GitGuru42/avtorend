@@ -1,35 +1,36 @@
-// js/fleet-manager.js - Управление отображением автопарка (Cloudinary версия)
+// js/fleet-manager.js - Управление отображением автопарка с динамической фильтрацией по категориям
 class FleetManager {
     constructor() {
         this.carsGrid = document.getElementById('carsGrid');
-        this.filterButtons = document.querySelectorAll('.filter-btn');
-        this.currentFilter = 'all';
+        this.filtersContainer = document.querySelector('.fleet-filters');
+        this.currentCategoryId = 'all'; // 'all' или ID категории
         this.cars = [];
         this.categories = [];
         this.isLoading = false;
-        
-        // ✅ НАСТРОЙКИ CLOUDINARY (ЗАМЕНИТЕ НА ВАШИ!)
-        this.CLOUDINARY_CLOUD_NAME = 'daxfsz15l'; // ЗАМЕНИТЕ НА ВАШ CLOUD_NAME!
-        this.CLOUDINARY_API_KEY = '288599529822729'; // Ваш API Key (если нужно)
-        this.CLOUDINARY_API_SECRET = 'OVtrZJHmq-QzHWSnU1BewtRApU4'; // Ваш API Secret (если нужно)
         
         this.init();
     }
 
     async init() {
-        console.log('🚗 Инициализация FleetManager (Cloudinary)...');
-        console.log(`☁️ Cloudinary Cloud Name: ${this.CLOUDINARY_CLOUD_NAME}`);
-        this.startLoading();
-    }
-
-    async startLoading() {
+        console.log('🚗 Инициализация FleetManager с динамическими фильтрами...');
+        
         try {
             this.showLoading();
+            
+            // 1. Загружаем категории из API
             await this.loadCategories();
-            await this.loadCars();
-            this.setupFilters();
+            
+            // 2. Создаем динамические фильтры
+            this.createCategoryFilters();
+            
+            // 3. Загружаем автомобили (все по умолчанию)
+            await this.loadCars({});
+            
+            // 4. Настраиваем события
             this.setupEvents();
-            console.log('✅ FleetManager инициализирован (Cloudinary)');
+            
+            console.log('✅ FleetManager инициализирован с динамическими фильтрами');
+            
         } catch (error) {
             console.error('❌ Ошибка инициализации FleetManager:', error);
             this.showError('Не удалось загрузить автопарк. Попробуйте обновить страницу.');
@@ -38,67 +39,139 @@ class FleetManager {
 
     async loadCategories() {
         try {
+            // Пробуем загрузить из API
             if (window.carAPI) {
                 this.categories = await window.carAPI.getCategories();
+                console.log('📊 Загружены категории из API:', this.categories);
             } else {
+                // Используем тестовые категории
                 this.categories = this.getMockCategories();
+                console.log('📊 Используем тестовые категории');
             }
+            
         } catch (error) {
             console.error('❌ Ошибка загрузки категорий:', error);
             this.categories = this.getMockCategories();
         }
     }
 
+    // ✅ НОВЫЙ МЕТОД: Создание динамических фильтров категорий
+    createCategoryFilters() {
+        if (!this.filtersContainer) {
+            console.warn('Контейнер для фильтров не найден');
+            return;
+        }
+        
+        // Очищаем статические фильтры
+        this.filtersContainer.innerHTML = '';
+        
+        // Создаем кнопку "Все"
+        const allButton = this.createFilterButton('all', 'Все автомобили', '🚗');
+        this.filtersContainer.appendChild(allButton);
+        
+        // Создаем кнопки для каждой категории
+        this.categories.forEach(category => {
+            const button = this.createFilterButton(
+                category.id, 
+                category.name, 
+                category.icon || this.getCategoryIcon(category.slug)
+            );
+            this.filtersContainer.appendChild(button);
+        });
+        
+        console.log(`✅ Создано ${this.categories.length + 1} фильтров категорий`);
+    }
+
+    // ✅ НОВЫЙ МЕТОД: Создание кнопки фильтра
+    createFilterButton(categoryId, text, icon) {
+        const button = document.createElement('button');
+        button.className = 'filter-btn';
+        button.dataset.categoryId = categoryId;
+        button.innerHTML = `
+            ${icon ? `<span class="filter-icon">${icon}</span>` : ''}
+            <span class="filter-text">${text}</span>
+        `;
+        
+        // Активируем кнопку "Все" по умолчанию
+        if (categoryId === 'all') {
+            button.classList.add('active');
+        }
+        
+        // Добавляем обработчик клика
+        button.addEventListener('click', () => this.handleFilterClick(categoryId, button));
+        
+        return button;
+    }
+
+    // ✅ НОВЫЙ МЕТОД: Обработка клика по фильтру
+    handleFilterClick(categoryId, button) {
+        // Обновляем активную кнопку
+        const allButtons = this.filtersContainer.querySelectorAll('.filter-btn');
+        allButtons.forEach(btn => btn.classList.remove('active'));
+        button.classList.add('active');
+        
+        // Сохраняем текущую категорию
+        this.currentCategoryId = categoryId;
+        
+        // Загружаем автомобили с фильтром
+        if (categoryId === 'all') {
+            this.loadCars({});
+        } else {
+            this.loadCars({ category_id: parseInt(categoryId) });
+        }
+        
+        // Прокручиваем к началу списка
+        if (this.carsGrid) {
+            this.carsGrid.scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'start' 
+            });
+        }
+        
+        console.log(`🎯 Применен фильтр: ${categoryId === 'all' ? 'Все автомобили' : 'Категория ID ' + categoryId}`);
+    }
+
     async loadCars(filters = {}) {
         this.isLoading = true;
         
         try {
+            // Показываем скелетоны загрузки
             this.showSkeleton();
             
+            // Используем API если доступен
             if (window.carAPI) {
-                const apiFilters = {};
-                if (filters.category && filters.category !== 'all') {
-                    const category = this.categories.find(c => c.slug === filters.category);
-                    if (category) {
-                        apiFilters.category_id = category.id;
-                    }
-                }
-                
-                this.cars = await window.carAPI.getCars(apiFilters);
-                console.log('🚗 Загружены автомобили из API:', this.cars.length);
-                
-                // ✅ Cloudinary отладка
-                if (this.cars.length > 0) {
-                    console.log('☁️ Первый автомобиль (Cloudinary):');
-                    console.log('   Изображения:', this.cars[0].images);
-                    console.log('   Обработанный URL:', this.getCarImage(this.cars[0]));
-                    
-                    // Проверим Cloudinary URL
-                    const firstImage = this.cars[0]?.images?.[0];
-                    if (firstImage) {
-                        console.log('   Исходный URL:', firstImage);
-                        console.log('   Содержит ваш cloud_name:', firstImage.includes(this.CLOUDINARY_CLOUD_NAME));
-                    }
-                }
+                this.cars = await window.carAPI.getCars(filters);
+                console.log('🚗 Загружены автомобили с фильтром:', filters, 'Количество:', this.cars.length);
             } else {
+                // Используем демо данные с фильтрацией
                 await new Promise(resolve => setTimeout(resolve, 1000));
-                this.cars = this.getCloudinaryDemoCars();
+                this.cars = this.getCarsFromBotDatabase();
+                
+                // Применяем фильтрацию локально для демо
+                if (filters.category_id) {
+                    this.cars = this.cars.filter(car => car.category_id === filters.category_id);
+                }
+                console.log('🚗 Используем демо данные:', this.cars.length);
             }
             
+            // Отрисовываем автомобили
             this.renderCars();
+            
         } catch (error) {
             console.error('❌ Ошибка загрузки автомобилей:', error);
+            this.showNotification('warning', 'Не удалось загрузить актуальные данные.');
             this.showError('Ошибка загрузки автомобилей. Проверьте подключение к серверу.');
+            
         } finally {
             this.isLoading = false;
         }
     }
 
-    // ✅ Cloudinary версия: Получение фото автомобиля
+    // ✅ ИЗМЕНЕНО: Правильный метод получения фото
     getCarImage(car) {
-        if (!car) return this.getCloudinaryPlaceholder();
+        if (!car) return this.getRandomCarImage();
         
-        // 1. Используем хелпер из carAPI
+        // 1. Используем хелпер из carAPI если он есть
         if (window.carAPI && typeof window.carAPI.getCarImageUrl === 'function') {
             return window.carAPI.getCarImageUrl(car);
         }
@@ -106,118 +179,49 @@ class FleetManager {
         // 2. Берем первое фото из массива images
         if (car.images && car.images.length > 0) {
             const firstImage = car.images[0];
-            return this.processCloudinaryUrl(firstImage);
+            return this.getCorrectImageUrl(firstImage);
         }
         
         // 3. Проверяем thumbnail
         if (car.thumbnail) {
-            return this.processCloudinaryUrl(car.thumbnail);
+            return this.getCorrectImageUrl(car.thumbnail);
         }
         
-        // 4. Если фото нет - используем Cloudinary placeholder
-        return this.getCloudinaryPlaceholder();
+        // 4. Если фото нет - используем заглушку
+        return this.getRandomCarImage();
     }
     
-    // ✅ ОСНОВНОЙ МЕТОД: Обработка Cloudinary URL
-    processCloudinaryUrl(imageUrl) {
-        if (!imageUrl || typeof imageUrl !== 'string') {
-            console.log('⚠️ URL изображения отсутствует или некорректен');
-            return this.getCloudinaryPlaceholder();
+    getCorrectImageUrl(imagePath) {
+        if (!imagePath || typeof imagePath !== 'string') {
+            return this.getDefaultCarImage();
         }
         
-        console.log('🔍 Обрабатываем URL:', imageUrl);
-        
-        // ✅ Если это уже полный URL с вашим Cloudinary
-        if (imageUrl.includes('res.cloudinary.com')) {
-            console.log('☁️ Обнаружен Cloudinary URL');
-            
-            // ✅ ВАЖНО: Проверяем, что URL содержит ваш cloud_name, а не demo
-            if (imageUrl.includes('/demo/')) {
-                console.warn('⚠️ Обнаружен DEMO Cloudinary URL. Заменяем на ваш cloud_name...');
-                // Заменяем demo на ваш cloud_name
-                imageUrl = imageUrl.replace('/demo/', `/${this.CLOUDINARY_CLOUD_NAME}/`);
-                console.log('✅ Заменён на:', imageUrl);
-            }
-            
-            // Проверяем, содержит ли URL ваш cloud_name
-            if (!imageUrl.includes(this.CLOUDINARY_CLOUD_NAME)) {
-                console.warn(`⚠️ Cloudinary URL не содержит ваш cloud_name "${this.CLOUDINARY_CLOUD_NAME}"`);
-                console.warn(`   URL содержит: ${imageUrl.split('/')[3]}`);
-            }
-            
-            // Проверяем, есть ли уже параметры оптимизации
-            if (imageUrl.includes('/w_') || imageUrl.includes('/c_')) {
-                console.log('✅ Cloudinary URL уже оптимизирован');
-                return imageUrl;
-            }
-            
-            try {
-                // Добавляем параметры оптимизации для Cloudinary
-                // Формат: https://res.cloudinary.com/CLOUD_NAME/image/upload/TRANSFORMATIONS/PUBLIC_ID
-                let optimizedUrl = imageUrl;
-                
-                // Ищем позицию "/upload/"
-                const uploadIndex = imageUrl.indexOf('/upload/');
-                if (uploadIndex !== -1) {
-                    const before = imageUrl.substring(0, uploadIndex + 8); // +8 для "/upload/"
-                    const after = imageUrl.substring(uploadIndex + 8);
-                    
-                    // Параметры оптимизации для веба:
-                    optimizedUrl = `${before}w_800,h_600,c_fill,q_auto,f_webp/${after}`;
-                    
-                    console.log('✅ Cloudinary URL оптимизирован для веба');
-                }
-                
-                return optimizedUrl;
-            } catch (e) {
-                console.error('❌ Ошибка обработки Cloudinary URL:', e);
-                return imageUrl; // Возвращаем как есть
-            }
+        // Если уже полный URL
+        if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+            return imagePath;
         }
         
-        // ✅ Если это просто имя файла или путь (старый формат)
-        if (imageUrl.includes('.jpg') || imageUrl.includes('.png') || imageUrl.includes('.webp')) {
-            console.log('📄 Обнаружено имя файла или путь:', imageUrl);
-            
-            // Если это только имя файла без пути
-            if (!imageUrl.includes('/') && !imageUrl.includes('http')) {
-                console.log('📁 Только имя файла, формируем Cloudinary URL');
-                // Формируем Cloudinary URL из имени файла
-                return `https://res.cloudinary.com/${this.CLOUDINARY_CLOUD_NAME}/image/upload/w_800,h_600,c_fill,q_auto,f_webp/${imageUrl}`;
-            }
-            
-            // Если это локальный путь на вашем сервере
-            if (imageUrl.includes('avtorend.onrender.com') || imageUrl.includes('/static/') || imageUrl.includes('/uploads/')) {
-                console.log('🌐 Обнаружен локальный путь, возвращаем как есть');
-                return imageUrl; // Оставляем как есть
-            }
+        if (imagePath.startsWith('/static/uploads/cars/')) {
+            return imagePath;
         }
         
-        // ✅ Fallback на Cloudinary placeholder
-        console.log('⚠️ Неизвестный формат URL, используем placeholder');
-        return this.getCloudinaryPlaceholder();
+        // Если только имя файла
+        if (!imagePath.includes('/') && imagePath.includes('.jpg')) {
+            return `/static/uploads/cars/${imagePath}`;
+        }
+        
+        // Любой другой случай
+        const filename = imagePath.split('/').pop();
+        return `/static/uploads/cars/${filename}`;
     }
     
-    // ✅ Cloudinary placeholder (ИСПРАВЛЕННЫЙ)
-    getCloudinaryPlaceholder() {
-        // ✅ ИСПРАВЛЕНО: Используем ВАШ cloud_name вместо demo
-        
-        // Если cloud_name не установлен, используем общий placeholder
-        if (!this.CLOUDINARY_CLOUD_NAME || this.CLOUDINARY_CLOUD_NAME === 'your_cloud_name_here') {
-            console.error('❌ Cloudinary cloud_name не установлен! Установите this.CLOUDINARY_CLOUD_NAME');
-            
-            // Возвращаем статичный URL без cloud_name (может не работать)
-            return 'https://via.placeholder.com/800x600/2c2c2c/ffffff?text=Car+Image';
-        }
-        
-        // Cloudinary изображения с ВАШИМ cloud_name
-        const cloudinaryPlaceholders = [
-            `https://res.cloudinary.com/${this.CLOUDINARY_CLOUD_NAME}/image/upload/w_800,h_600,c_fill,q_auto,f_webp/samples/car`,
-            `https://res.cloudinary.com/${this.CLOUDINARY_CLOUD_NAME}/image/upload/w_800,h_600,c_fill,q_auto,f_webp/samples/automotive`,
-            `https://res.cloudinary.com/${this.CLOUDINARY_CLOUD_NAME}/image/upload/w_800,h_600,c_fill,q_auto,f_webp/samples/road-trip`
+    getDefaultCarImage() {
+        const defaultImages = [
+            '/static/photos_cars/default-car.jpg',
+            '/static/uploads/cars/default-car.jpg',
+            '/images/default-car.jpg'
         ];
-        
-        return cloudinaryPlaceholders[Math.floor(Math.random() * cloudinaryPlaceholders.length)];
+        return defaultImages[0];
     }
 
     showSkeleton() {
@@ -273,10 +277,12 @@ class FleetManager {
         const carsHTML = this.cars.map(car => this.createCarCard(car)).join('');
         this.carsGrid.innerHTML = carsHTML;
         
+        // Инициализируем AOS для новых элементов
         if (window.AOS) {
             setTimeout(() => AOS.refresh(), 100);
         }
         
+        // Анимация появления
         setTimeout(() => {
             const cards = this.carsGrid.querySelectorAll('.car-card');
             cards.forEach((card, index) => {
@@ -288,25 +294,28 @@ class FleetManager {
     }
 
     createCarCard(car) {
+        // Находим категорию
         const category = car.category || this.categories.find(c => c.id === car.category_id);
         const categoryName = category?.name || 'Не указано';
         const categorySlug = category?.slug || 'other';
         
+        // Форматируем данные
         const formattedPrice = new Intl.NumberFormat('ru-RU').format(car.daily_price || 0);
+        const formattedMileage = car.mileage ? `${car.mileage.toLocaleString('ru-RU')} км` : 'Новый';
         
-        // ✅ Cloudinary оптимизированное фото
+        // Получаем фото
         const carImage = this.getCarImage(car);
         
         return `
             <div class="car-card" data-aos="fade-up" data-car-id="${car.id}" data-category="${categorySlug}">
-                <!-- Картинка -->
+                <!-- Картинка с эффектами -->
                 <div class="car-image-container">
                     <div class="image-gradient"></div>
                     <img src="${carImage}" 
                          alt="${car.brand} ${car.model}" 
                          class="car-image"
                          loading="lazy"
-                         onerror="this.onerror=null; this.src='${this.getCloudinaryPlaceholder()}'; console.log('⚠️ Ошибка загрузки изображения, использован placeholder');">
+                         onerror="this.onerror=null; this.src='${this.getRandomCarImage()}';">
                     
                     <!-- Бейджи -->
                     <div class="car-badges">
@@ -320,8 +329,9 @@ class FleetManager {
                     </div>
                 </div>
                 
-                <!-- Информация -->
+                <!-- Информация об автомобиле -->
                 <div class="car-info">
+                    <!-- Заголовок и цена -->
                     <div class="car-header">
                         <h3 class="car-title">
                             ${car.brand} ${car.model} 
@@ -333,10 +343,12 @@ class FleetManager {
                         </div>
                     </div>
                     
+                    <!-- Описание -->
                     <p class="car-description">
                         ${car.description || `${car.brand} ${car.model} ${car.year} года. Отличное состояние.`}
                     </p>
                     
+                    <!-- Характеристики -->
                     <div class="car-specs">
                         <div class="car-spec" title="${car.seats || 4} мест">
                             <span class="spec-icon">👥</span>
@@ -356,6 +368,7 @@ class FleetManager {
                         </div>
                     </div>
                     
+                    <!-- Кнопки действий -->
                     <div class="car-actions">
                         <button class="car-book-btn" 
                                 onclick="fleetManager.bookCar(${car.id})" 
@@ -372,32 +385,79 @@ class FleetManager {
 
     getCategoryIcon(slug) {
         const icons = {
-            'economy': '💰', 'comfort': '🚗', 'business': '💼', 'premium': '👑',
-            'suv': '🚙', 'sport': '🏎️', 'electric': '⚡', 'minivan': '🚐'
+            'economy': '💰',
+            'comfort': '🚗',
+            'business': '💼',
+            'premium': '👑',
+            'suv': '🚙',
+            'sport': '🏎️',
+            'electric': '⚡',
+            'minivan': '🚐'
         };
         return icons[slug] || '🚘';
     }
 
-    setupFilters() {
-        if (!this.filterButtons.length) return;
+    getRandomCarImage() {
+        const localImages = [
+            '/static/photos_cars/default-car-1.jpg',
+            '/static/photos_cars/default-car-2.jpg',
+            '/static/photos_cars/default-car-3.jpg'
+        ];
         
-        this.filterButtons.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.filterButtons.forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                this.currentFilter = btn.dataset.category;
-                this.loadCars({ category: this.currentFilter });
-            });
-        });
+        return localImages[Math.floor(Math.random() * localImages.length)];
     }
 
     setupEvents() {
+        // Обновление при изменении языка
         document.addEventListener('languageChange', () => {
             this.renderCars();
         });
     }
 
+    // === ПУБЛИЧНЫЕ МЕТОДЫ ===
+    
+    showCarDetails(carId) {
+        const car = this.cars.find(c => c.id == carId);
+        if (!car) return;
+        
+        alert(`${car.brand} ${car.model} ${car.year}\nЦена: ${car.daily_price} ₽/сутки\nСтатус: ${this.getStatusText(car.status)}`);
+    }
+
+    bookCar(carId) {
+        const car = this.cars.find(c => c.id == carId);
+        if (!car) return;
+        
+        if (car.status !== 'available') {
+            this.showNotification('error', 'Этот автомобиль сейчас недоступен для бронирования');
+            return;
+        }
+        
+        // Открываем форму бронирования
+        this.openBookingForm(car);
+    }
+
+    // === УВЕДОМЛЕНИЯ ===
+    
+    showNotification(type, message) {
+        const notification = document.createElement('div');
+        notification.className = 'notification';
+        notification.innerHTML = `
+            <span class="notification-icon">${type === 'error' ? '❌' : '⚠️'}</span>
+            <span class="notification-text">${message}</span>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => notification.classList.add('show'), 10);
+        
+        setTimeout(() => {
+            notification.classList.remove('show');
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
+
+    // === ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ===
+    
     getTransmissionText(transmission) {
         const map = {
             'automatic': 'Автомат',
@@ -419,34 +479,79 @@ class FleetManager {
         return map[status] || status || 'Неизвестно';
     }
 
-    // === ДЕМО ДАННЫЕ (Cloudinary версия - ИСПРАВЛЕННЫЕ) ===
+    // === ДЕМО ДАННЫЕ ===
+    
     getMockCategories() {
         return [
-            { id: 1, name: "Эконом", slug: "economy", description: "Бюджетные автомобили" },
-            { id: 2, name: "Комфорт", slug: "comfort", description: "Автомобили среднего класса" },
-            { id: 3, name: "Бизнес", slug: "business", description: "Автомобили для деловых поездок" },
-            { id: 4, name: "Премиум", slug: "premium", description: "Люкс автомобили" },
-            { id: 5, name: "Внедорожник", slug: "suv", description: "Внедорожники и кроссоверы" }
+            { id: 1, name: "Эконом", slug: "economy", icon: "💰" },
+            { id: 2, name: "Комфорт", slug: "comfort", icon: "🚗" },
+            { id: 3, name: "Бизнес", slug: "business", icon: "💼" },
+            { id: 4, name: "Премиум", slug: "premium", icon: "👑" },
+            { id: 5, name: "Внедорожник", slug: "suv", icon: "🚙" },
+            { id: 6, name: "Минивэн", slug: "minivan", icon: "🚐" },
+            { id: 7, name: "Спорт", slug: "sport", icon: "🏎️" },
+            { id: 8, name: "Электрокар", slug: "electric", icon: "⚡" }
         ];
     }
 
-    async getCloudinaryDemoCars() {
+    async getCarsFromBotDatabase() {
         try {
-            const response = await fetch('/api/cars');
+            const response = await fetch('http://localhost:8000/api/cars');
             if (response.ok) {
                 const cars = await response.json();
-                console.log('✅ Получили данные из API:', cars.length);
+                console.log('✅ Получили данные напрямую из API:', cars.length);
                 return cars;
             }
         } catch (error) {
-            console.log('API не доступен, используем Cloudinary демо данные');
+            console.log('API не доступен, используем fallback');
         }
         
-        // Fallback: демо данные с Cloudinary URL (ИСПРАВЛЕННЫЕ)
+        // Fallback: демо данные
         return [
             {
                 id: 1,
-                brand: "Mercedes-Benz",
+                brand: "Toyota",
+                model: "Camry",
+                year: 2022,
+                category_id: 2,
+                engine_capacity: 2.5,
+                horsepower: 203,
+                fuel_type: "бензин",
+                transmission: "automatic",
+                doors: 4,
+                seats: 5,
+                color: "черный",
+                daily_price: 3500,
+                mileage: 15000,
+                features: ["кондиционер", "подогрев сидений"],
+                images: ["/static/photos_cars/car_20241219_120000_0.jpg"],
+                thumbnail: "/static/photos_cars/car_20241219_120000_0.jpg",
+                description: "Toyota Camry 2022 года",
+                status: "available"
+            },
+            {
+                id: 2,
+                brand: "BMW",
+                model: "X5",
+                year: 2023,
+                category_id: 5,
+                engine_capacity: 3.0,
+                horsepower: 340,
+                fuel_type: "дизель",
+                transmission: "automatic",
+                doors: 5,
+                seats: 5,
+                color: "белый",
+                daily_price: 8500,
+                mileage: 8000,
+                images: ["/static/photos_cars/car_20241219_120000_1.jpg"],
+                thumbnail: "/static/photos_cars/car_20241219_120000_1.jpg",
+                description: "BMW X5 2023 года",
+                status: "available"
+            },
+            {
+                id: 3,
+                brand: "Mercedes",
                 model: "S-Class",
                 year: 2023,
                 category_id: 4,
@@ -459,45 +564,47 @@ class FleetManager {
                 color: "черный",
                 daily_price: 12000,
                 mileage: 5000,
-                features: ["массаж сидений", "вентиляция", "панорамная крыша"],
-                images: [`https://res.cloudinary.com/${this.CLOUDINARY_CLOUD_NAME}/image/upload/samples/car`],
-                thumbnail: `https://res.cloudinary.com/${this.CLOUDINARY_CLOUD_NAME}/image/upload/w_400,h_300,c_fill,q_auto,f_webp/samples/car`,
-                description: "Mercedes-Benz S-Class 2023",
+                images: ["/static/photos_cars/car_20241219_120000_2.jpg"],
+                thumbnail: "/static/photos_cars/car_20241219_120000_2.jpg",
+                description: "Mercedes S-Class 2023 года",
                 status: "available"
             },
             {
-                id: 2,
-                brand: "BMW",
-                model: "X7",
-                year: 2024,
+                id: 4,
+                brand: "Audi",
+                model: "Q7",
+                year: 2022,
                 category_id: 5,
-                engine_capacity: 4.4,
-                horsepower: 530,
-                fuel_type: "бензин",
+                engine_capacity: 3.0,
+                horsepower: 340,
+                fuel_type: "дизель",
                 transmission: "automatic",
                 doors: 5,
                 seats: 7,
-                color: "белый",
-                daily_price: 15000,
-                mileage: 3000,
-                features: ["третий ряд сидений", "панорамная крыша"],
-                images: [`https://res.cloudinary.com/${this.CLOUDINARY_CLOUD_NAME}/image/upload/samples/automotive`],
-                thumbnail: `https://res.cloudinary.com/${this.CLOUDINARY_CLOUD_NAME}/image/upload/w_400,h_300,c_fill,q_auto,f_webp/samples/automotive`,
-                description: "BMW X7 2024",
+                color: "серый",
+                daily_price: 9500,
+                mileage: 12000,
+                images: ["/static/photos_cars/car_20241219_120000_3.jpg"],
+                thumbnail: "/static/photos_cars/car_20241219_120000_3.jpg",
+                description: "Audi Q7 2022 года",
                 status: "available"
             }
         ];
     }
 
     createNoCarsMessage() {
+        const categoryName = this.currentCategoryId === 'all' 
+            ? 'во всех категориях' 
+            : 'в этой категории';
+        
         return `
             <div class="no-cars-message" data-aos="fade-up">
                 <div class="no-cars-icon">🚗</div>
                 <h3>Автомобили не найдены</h3>
-                <p class="subtext">Попробуйте изменить фильтры</p>
-                <button class="retry-btn" onclick="fleetManager.loadCars({ category: fleetManager.currentFilter })">
+                <p class="subtext">К сожалению, нет доступных автомобилей ${categoryName}.</p>
+                <button class="retry-btn" onclick="fleetManager.loadCars({})">
                     <span class="btn-icon">🔄</span>
-                    Загрузить снова
+                    Показать все автомобили
                 </button>
             </div>
         `;
@@ -505,6 +612,7 @@ class FleetManager {
 
     showLoading() {
         if (!this.carsGrid) return;
+        
         this.carsGrid.innerHTML = `
             <div class="loading-cars">
                 <div class="spinner"></div>
@@ -515,53 +623,18 @@ class FleetManager {
 
     showError(message) {
         if (!this.carsGrid) return;
+        
         this.carsGrid.innerHTML = `
             <div class="error-message" data-aos="fade-up">
                 <div class="error-icon">⚠️</div>
                 <h3>Ошибка загрузки</h3>
                 <p>${message}</p>
-                <button class="retry-btn" onclick="fleetManager.startLoading()">
+                <button class="retry-btn" onclick="fleetManager.init()">
                     <span class="btn-icon">🔄</span>
                     Повторить попытку
                 </button>
             </div>
         `;
-    }
-
-    // === ПУБЛИЧНЫЕ МЕТОДЫ ===
-    showCarDetails(carId) {
-        const car = this.cars.find(c => c.id == carId);
-        if (!car) return;
-        alert(`${car.brand} ${car.model} ${car.year}\nЦена: ${car.daily_price} ₽/сутки\nСтатус: ${this.getStatusText(car.status)}`);
-    }
-
-    bookCar(carId) {
-        const car = this.cars.find(c => c.id == carId);
-        if (!car) return;
-        
-        if (car.status !== 'available') {
-            this.showNotification('error', 'Этот автомобиль сейчас недоступен для бронирования');
-            return;
-        }
-        
-        // Открываем форму бронирования
-        this.openBookingForm(car);
-    }
-
-    showNotification(type, message) {
-        const notification = document.createElement('div');
-        notification.className = 'notification';
-        notification.innerHTML = `
-            <span class="notification-icon">${type === 'error' ? '❌' : '⚠️'}</span>
-            <span class="notification-text">${message}</span>
-        `;
-        
-        document.body.appendChild(notification);
-        setTimeout(() => notification.classList.add('show'), 10);
-        setTimeout(() => {
-            notification.classList.remove('show');
-            setTimeout(() => notification.remove(), 300);
-        }, 3000);
     }
 }
 
@@ -572,37 +645,3 @@ window.fleetManager = new FleetManager();
 window.initFleetManager = () => window.fleetManager.init();
 window.showCarDetails = (id) => window.fleetManager.showCarDetails(id);
 window.bookCar = (id) => window.fleetManager.bookCar(id);
-
-// ✅ ДОБАВЛЕНО: Отладка Cloudinary
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('🔍 Проверка Cloudinary настроек...');
-    console.log(`☁️ Cloud Name: ${window.fleetManager.CLOUDINARY_CLOUD_NAME}`);
-    
-    if (window.fleetManager.CLOUDINARY_CLOUD_NAME === 'your_cloud_name_here') {
-        console.error('❌ ВНИМАНИЕ: Cloudinary cloud_name не настроен!');
-        console.error('   Пожалуйста, откройте Cloudinary Console и найдите ваш Cloud Name.');
-        console.error('   Затем замените "your_cloud_name_here" в fleet-manager.js на ваш реальный cloud_name.');
-        
-        // Покажем предупреждение пользователю
-        const warningDiv = document.createElement('div');
-        warningDiv.style.cssText = `
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            background: #ff4444;
-            color: white;
-            padding: 10px;
-            border-radius: 5px;
-            z-index: 9999;
-            max-width: 300px;
-            font-family: Arial, sans-serif;
-            font-size: 12px;
-        `;
-        warningDiv.innerHTML = `
-            <strong>⚠️ Cloudinary не настроен</strong><br>
-            Замените "your_cloud_name_here" в fleet-manager.js
-        `;
-        document.body.appendChild(warningDiv);
-        setTimeout(() => warningDiv.remove(), 10000);
-    }
-});
