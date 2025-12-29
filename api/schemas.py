@@ -136,8 +136,10 @@ class CarCreate(CarBase):
             if not img:
                 continue
             
-            # Нормализуем путь для web-доступа
-            corrected.append(cls.normalize_image_path(img))
+            # ✅ Нормализуем путь с учетом Cloudinary
+            normalized = cls.normalize_image_path(img)
+            if normalized:
+                corrected.append(normalized)
         
         return corrected
     
@@ -157,28 +159,35 @@ class CarCreate(CarBase):
     
     @staticmethod
     def normalize_image_path(image_path: str) -> str:
-        """Нормализация пути к изображению для web-доступа"""
-        # Убираем двойные слеши
-        while '//' in image_path:
-            image_path = image_path.replace('//', '/')
-        
-        # Убираем пробелы и специальные символы
-        image_path = image_path.strip()
-        
-        # Если путь уже правильный (начинается с /static/uploads/cars/)
-        if image_path.startswith('/static/uploads/cars/'):
+        """Нормализация пути к изображению с поддержкой Cloudinary"""
+        if not image_path or not isinstance(image_path, str):
             return image_path
         
-        # Если только имя файла
+        image_path = image_path.strip()
+        
+        # ✅ ВАЖНО: Если это Cloudinary URL - сохраняем как есть
+        if 'res.cloudinary.com' in image_path:
+            # Простая очистка URL
+            while '//' in image_path:
+                image_path = image_path.replace('//', '/')
+            return image_path
+        
+        # ✅ Если это локальный путь на вашем сервере
+        if image_path.startswith('/static/') or image_path.startswith('/uploads/'):
+            return image_path
+        
+        # ✅ Если только имя файла
         if '/' not in image_path:
             return f'/static/uploads/cars/{image_path}'
         
-        # Извлекаем имя файла из любого пути
+        # ✅ Извлекаем имя файла из полного URL (не Cloudinary)
         filename = image_path.split('/')[-1]
-        
-        # Очищаем имя файла
         filename = re.sub(r'[^\w\s.-]', '', filename)
         filename = filename.strip()
+        
+        # Для внешних URL (не Cloudinary) возвращаем как есть
+        if image_path.startswith('http'):
+            return image_path
         
         return f'/static/uploads/cars/{filename}'
 
