@@ -2,7 +2,7 @@
 services:
   # 1. WEB SERVICE (API + Frontend) - будет слушать порт
   - type: web
-    name: avtorend-web
+    name: avtorend
     env: python
     region: frankfurt
     plan: free
@@ -32,7 +32,7 @@ services:
 
   # 2. BACKGROUND WORKER (ТОЛЬКО Telegram бот) - не слушает порт
   - type: worker
-    name: avtorend-telegram-bot
+    name: avtorend-bot1
     env: python
     region: frankfurt
     plan: free
