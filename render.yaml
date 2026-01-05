@@ -1,6 +1,5 @@
-# render.yaml - ДВА отдельных сервиса
 services:
-  # 1. WEB SERVICE (API + Frontend) - будет слушать порт
+  # 1. WEB SERVICE (API + Frontend)
   - type: web
     name: avtorend
     env: python
@@ -20,6 +19,14 @@ services:
         sync: false
       - key: ALLOWED_ORIGINS
         value: "*"
+      - key: PORT
+        value: "8000"  # ← ДОБАВИТЬ!
+    
+    # ВАЖНО: Health check endpoint!
+    healthCheckPath: /health
+    healthCheckTimeout: 30
+    
+    # Фронтенд
     routes:
       - type: rewrite
         source: /*
@@ -30,7 +37,7 @@ services:
         name: Cache-Control
         value: public, max-age=3600
 
-  # 2. BACKGROUND WORKER (ТОЛЬКО Telegram бот) - не слушает порт
+  # 2. BACKGROUND WORKER (Telegram бот)
   - type: worker
     name: avtorend-bot1
     env: python
