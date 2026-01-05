@@ -2,6 +2,7 @@
 import os
 import sys
 import time
+import threading
 from contextlib import asynccontextmanager
 from typing import List, Optional
 from pathlib import Path
@@ -38,6 +39,82 @@ except ImportError as e:
         models = None
         schemas = None
 
+# ========== ФУНКЦИЯ ЗАПУСКА ТЕЛЕГРАМ БОТА ==========
+def start_telegram_bot():
+    """Запуск Telegram бота в отдельном потоке"""
+    try:
+        token = os.getenv('TELEGRAM_BOT_TOKEN')
+        if not token:
+            print("⚠️ TELEGRAM_BOT_TOKEN не установлен, бот не запущен")
+            return
+        
+        print("🤖 Запускаем Telegram бота...")
+        
+        # Проверяем токен
+        if not token or len(token) < 30:
+            print("❌ Невалидный токен Telegram бота")
+            return
+        
+        # Импортируем внутри функции чтобы не грузить если не нужно
+        try:
+            from telegram import Bot
+            from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+            
+            # Инициализация
+            bot = Bot(token=token)
+            updater = Updater(bot=bot, use_context=True)
+            
+            # Базовые команды
+            def start(update, context):
+                update.message.reply_text('Бот запущен! Используйте /help для списка команд.')
+            
+            def help_command(update, context):
+                update.message.reply_text('Доступные команды:\n/start - начало\n/status - статус\n/help - помощь')
+            
+            def status(update, context):
+                update.message.reply_text('✅ Бот работает на AvtoRend')
+            
+            # Регистрация обработчиков
+            dispatcher = updater.dispatcher
+            dispatcher.add_handler(CommandHandler("start", start))
+            dispatcher.add_handler(CommandHandler("help", help_command))
+            dispatcher.add_handler(CommandHandler("status", status))
+            
+            print("✅ Команды бота зарегистрированы")
+            
+            # Запуск polling с защитой от конфликтов
+            import random
+            delay = random.randint(5, 15)  # Случайная задержка
+            print(f"⏳ Ждем {delay} секунд перед запуском polling...")
+            time.sleep(delay)
+            
+            updater.start_polling(
+                poll_interval=10.0,  # 10 секунд между запросами
+                timeout=30,
+                drop_pending_updates=True,  # КРИТИЧЕСКИ ВАЖНО!
+                allowed_updates=None,
+                bootstrap_retries=-1,  # Бесконечные попытки переподключения
+                read_timeout=30,
+                write_timeout=30,
+                connect_timeout=30
+            )
+            
+            print("✅ Telegram бот запущен и слушает сообщения")
+            
+            # Бесконечный цикл
+            updater.idle()
+            
+        except ImportError as e:
+            print(f"❌ Не удалось импортировать telegram модули: {e}")
+            print("📦 Установите: pip install python-telegram-bot==20.7")
+        except Exception as e:
+            print(f"❌ Ошибка запуска бота: {e}")
+            import traceback
+            traceback.print_exc()
+            
+    except Exception as e:
+        print(f"❌ Критическая ошибка в функции бота: {e}")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -48,14 +125,11 @@ async def lifespan(app: FastAPI):
         if Base and engine:
             print("🗄️  Создание таблиц в базе данных...")
             try:
-                # ПРОСТОЕ создание таблиц
                 Base.metadata.create_all(bind=engine)
                 print("✅ Таблицы созданы (если их не было)")
                 
-                # Простая проверка без сложного SQL
-                from sqlalchemy import text
                 with engine.connect() as conn:
-                    # Простой запрос для проверки
+                    from sqlalchemy import text
                     result = conn.execute(text("SELECT current_database()"))
                     db_name = result.scalar()
                     print(f"📊 База данных: {db_name}")
@@ -69,26 +143,23 @@ async def lifespan(app: FastAPI):
         print("✅ Директории созданы")
         
         # ========= ЗАПУСК ТЕЛЕГРАМ БОТА =========
-        # try:
-        #     from api.telegram_bot import start_bot
-        #     import threading
+        telegram_token = os.getenv('TELEGRAM_BOT_TOKEN')
+        if telegram_token and len(telegram_token) > 30:
+            print("🤖 Запуск Telegram бота в отдельном потоке...")
             
-        #     print("🤖 Инициализация Telegram бота...")
+            # Ждем 10 секунд чтобы API начал работать
+            time.sleep(10)
             
-        #     # Запускаем бота в отдельном потоке
-        #     bot_thread = threading.Thread(
-        #         target=start_bot,
-        #         daemon=True,  # Демон-поток (завершится с основным)
-        #         name="TelegramBot"
-        #     )
-        #     bot_thread.start()
-        #     print("✅ Telegram bot запущен в фоновом режиме")
-            
-        # except ImportError as e:
-        #     print(f"⚠️ Файл бота не найден: {e}")
-        #     print(f"Путь: {os.path.join(current_dir, 'telegram_bot.py')}")
-        # except Exception as e:
-        #     print(f"❌ Ошибка запуска бота: {e}")
+            # Запускаем бота в отдельном потоке как демон
+            bot_thread = threading.Thread(
+                target=start_telegram_bot,
+                daemon=True,  # Демон-поток (завершится с основным процессом)
+                name="TelegramBotThread"
+            )
+            bot_thread.start()
+            print("✅ Telegram bot запущен в фоновом режиме")
+        else:
+            print("⚠️ TELEGRAM_BOT_TOKEN не установлен или невалиден. Бот не запущен.")
         
         # ========= ДОБАВЛЕНИЕ ТЕСТОВЫХ ДАННЫХ =========
         try:
@@ -213,11 +284,6 @@ for route, dir_name in STATIC_DIRS:
     if dir_path.exists():
         app.mount(route, StaticFiles(directory=str(dir_path)), name=dir_name)
         print(f"✅ Статика подключена: {route} -> {dir_path}")
-        
-        # Показываем несколько файлов для проверки
-        files = list(dir_path.glob("*.*"))[:3]  # только файлы с расширениями
-        if files:
-            print(f"   Примеры файлов: {[f.name for f in files]}")
     else:
         print(f"⚠️  Папка не найдена: {dir_path}")
 
@@ -242,18 +308,15 @@ async def log_requests(request: Request, call_next):
 # ====================== ROUTES ======================
 
 # Health check endpoint для Render (без логирования)
-# В начало файла, после создания app
 @app.get("/health")
 async def health_check():
     """Health check endpoint для Render"""
     return {
         "status": "healthy", 
         "service": "avtorend-api",
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
+        "bot_status": "running" if os.getenv('TELEGRAM_BOT_TOKEN') else "disabled"
     }
-
-# Если нет импорта datetime, добавьте:
-from datetime import datetime
 
 # ГЛАВНАЯ СТРАНИЦА - только один эндпоинт /
 @app.get("/")
@@ -277,6 +340,7 @@ async def api_info():
         "documentation": "/api/docs",
         "health_check": "/health",
         "environment": os.getenv("ENVIRONMENT", "development"),
+        "bot": "enabled" if os.getenv('TELEGRAM_BOT_TOKEN') else "disabled",
         "endpoints": {
             "cars": "/api/cars",
             "categories": "/api/categories",
@@ -293,7 +357,8 @@ def test():
         "environment": os.getenv("ENVIRONMENT", "development"),
         "render": bool(os.getenv("RENDER")),
         "python_version": sys.version.split()[0],
-        "host": os.getenv("RENDER_EXTERNAL_HOSTNAME", "localhost")
+        "host": os.getenv("RENDER_EXTERNAL_HOSTNAME", "localhost"),
+        "bot_token_set": bool(os.getenv('TELEGRAM_BOT_TOKEN'))
     }
 
 @app.get("/api/info")
@@ -305,6 +370,7 @@ async def server_info():
         "environment": os.getenv("ENVIRONMENT", "development"),
         "status": "running",
         "database": "connected" if os.getenv("DATABASE_URL") else "local",
+        "bot": "enabled" if os.getenv('TELEGRAM_BOT_TOKEN') else "disabled",
         "hosting": "Render" if os.getenv("RENDER") else "Local",
         "debug": os.getenv("DEBUG", "false").lower() == "true"
     }
@@ -371,6 +437,34 @@ def get_car(car_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка получения автомобиля: {str(e)}")
 
+# Эндпоинт для статуса бота
+@app.get("/api/bot/status")
+async def bot_status():
+    """Получить статус Telegram бота"""
+    token = os.getenv('TELEGRAM_BOT_TOKEN')
+    if not token:
+        return {"status": "disabled", "reason": "TELEGRAM_BOT_TOKEN not set"}
+    
+    try:
+        # Пытаемся проверить токен
+        import requests
+        response = requests.get(f"https://api.telegram.org/bot{token}/getMe", timeout=5)
+        
+        if response.status_code == 200:
+            return {
+                "status": "running",
+                "bot_username": response.json()["result"]["username"],
+                "token_valid": True
+            }
+        else:
+            return {
+                "status": "error",
+                "token_valid": False,
+                "telegram_response": response.status_code
+            }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
 # ✅ Обработчик для favicon.ico
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
@@ -380,7 +474,7 @@ async def favicon():
     # Возвращаем пустой ответ с 204 статусом
     return Response(status_code=204)
 
-# ✅ Глобальный обработчик ошибок (ИСПРАВЛЕННЫЙ - возвращаем JSONResponse)
+# ✅ Глобальный обработчик ошибок
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 @app.exception_handler(StarletteHTTPException)
@@ -407,113 +501,6 @@ async def general_exception_handler(request: Request, exc: Exception):
             "details": error_details
         }
     )
-
-# ✅ Эндпоинт для проверки статики
-@app.get("/debug/static")
-async def debug_static():
-    """Отладка статических файлов"""
-    result = {}
-    for route, dir_name in STATIC_DIRS:
-        dir_path = BASE_DIR / dir_name
-        if dir_path.exists():
-            files = [f.name for f in dir_path.glob("*") if f.is_file()][:10]
-            result[dir_name] = {
-                "exists": True,
-                "path": str(dir_path),
-                "files": files,
-                "count": len(files)
-            }
-        else:
-            result[dir_name] = {
-                "exists": False,
-                "path": str(dir_path)
-            }
-    return result
-
-# Эндпоинт для проверки базы данных
-@app.get("/debug/db")
-async def debug_db():
-    """Проверка состояния базы данных"""
-    try:
-        from sqlalchemy import text
-        
-        with engine.connect() as conn:
-            # Проверяем таблицы
-            result = conn.execute(text("""
-                SELECT table_name 
-                FROM information_schema.tables 
-                WHERE table_schema = 'public'
-                ORDER BY table_name
-            """))
-            tables = [row[0] for row in result]
-            
-            # Проверяем данные в основных таблицах
-            data_counts = {}
-            for table in ['categories', 'cars']:
-                try:
-                    if table in tables:
-                        result = conn.execute(text(f"SELECT COUNT(*) FROM {table}"))
-                        data_counts[table] = result.scalar()
-                    else:
-                        data_counts[table] = "table not exists"
-                except:
-                    data_counts[table] = "error"
-            
-            return {
-                "status": "connected",
-                "tables": tables,
-                "data_counts": data_counts,
-                "engine_url": str(engine.url).split('@')[1] if '@' in str(engine.url) else str(engine.url)
-            }
-            
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-# Простой эндпоинт для API
-@app.get("/api/test-data")
-async def test_data():
-    """Тестовый эндпоинт для проверки работы API и БД"""
-    try:
-        from api.database import SessionLocal
-        from api.models import Category, Car
-        
-        db = SessionLocal()
-        
-        # Получаем категории
-        categories = db.query(Category).filter(Category.is_active == True).all()
-        categories_data = [
-            {"id": cat.id, "name": cat.name, "slug": cat.slug}
-            for cat in categories
-        ]
-        
-        # Получаем автомобили
-        cars = db.query(Car).filter(Car.is_active == True).all()
-        cars_data = [
-            {
-                "id": car.id,
-                "brand": car.brand,
-                "model": car.model,
-                "year": car.year,
-                "price": car.daily_price,
-                "status": car.status.value
-            }
-            for car in cars
-        ]
-        
-        db.close()
-        
-        return {
-            "success": True,
-            "categories": categories_data,
-            "cars": cars_data,
-            "counts": {
-                "categories": len(categories_data),
-                "cars": len(cars_data)
-            }
-        }
-        
-    except Exception as e:
-        return {"success": False, "error": str(e)}
 
 # ====================== MAIN ======================
 if __name__ == "__main__":
