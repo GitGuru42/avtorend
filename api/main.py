@@ -5,6 +5,7 @@ import time
 from contextlib import asynccontextmanager
 from typing import List, Optional
 from pathlib import Path
+from datetime import datetime
 
 from fastapi import FastAPI, Depends, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -241,25 +242,18 @@ async def log_requests(request: Request, call_next):
 # ====================== ROUTES ======================
 
 # Health check endpoint для Render (без логирования)
-@app.get("/health", include_in_schema=False)
+# В начало файла, после создания app
+@app.get("/health")
 async def health_check():
-    """Проверка здоровья сервиса для мониторинга"""
-    db_status = "unknown"
-    if engine:
-        try:
-            with engine.connect() as conn:
-                conn.execute("SELECT 1")
-                db_status = "connected"
-        except:
-            db_status = "disconnected"
-    
+    """Health check endpoint для Render"""
     return {
-        "status": "healthy" if db_status == "connected" else "degraded",
-        "service": "AvtoRend API",
-        "version": "1.0.0",
-        "database": db_status,
-        "timestamp": time.time()
+        "status": "healthy", 
+        "service": "avtorend-api",
+        "timestamp": datetime.now().isoformat()
     }
+
+# Если нет импорта datetime, добавьте:
+from datetime import datetime
 
 # ГЛАВНАЯ СТРАНИЦА - только один эндпоинт /
 @app.get("/")
