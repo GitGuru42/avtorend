@@ -1,0 +1,239 @@
+/* ОБНОВЛЕННЫЙ chat.css */
+
+/* Основной контейнер чата */
+.chat-widget {
+    position: fixed;
+    bottom: 100px;
+    right: 30px;
+    width: 350px;
+    height: 500px;
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    display: none;
+    flex-direction: column;
+    z-index: 1001;
+    border: 1px solid var(--border);
+    
+    /* Критически важные свойства для flex-скролла */
+    min-height: 400px;
+    max-height: 80vh;
+}
+
+.chat-widget.active {
+    display: flex;
+}
+
+/* Шапка чата - фиксированная высота */
+.chat-header {
+    padding: var(--spacing-sm);
+    background: var(--primary-color);
+    color: white;
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 60px; /* Фиксированная высота */
+    flex-shrink: 0; /* Не сжимается */
+}
+
+.chat-close {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* КОНТЕЙНЕР СООБЩЕНИЙ - САМОЕ ВАЖНОЕ */
+.chat-messages {
+    flex: 1; /* Занимает всё доступное пространство */
+    padding: var(--spacing-sm);
+    overflow-y: auto; /* Включаем скролл */
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    
+    /* КРИТИЧЕСКИ ВАЖНО для flexbox скролла */
+    min-height: 0; /* Позволяет сжиматься */
+    flex-basis: 0; /* Начинает с 0 высоты */
+    flex-shrink: 1; /* Может сжиматься */
+    
+    /* Улучшаем скролл */
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch; /* Плавный скролл на iOS */
+}
+
+/* Стили для скроллбара (Webkit) */
+.chat-messages::-webkit-scrollbar {
+    width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 3px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.3);
+}
+
+/* Для Firefox */
+.chat-messages {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.2) rgba(0, 0, 0, 0.05);
+}
+
+/* Сообщения */
+.chat-message {
+    padding: 0.75rem 1rem;
+    border-radius: 18px;
+    max-width: 80%;
+    word-wrap: break-word;
+    flex-shrink: 0; /* Сообщения не сжимаются */
+}
+
+.chat-message.bot {
+    background: var(--background-secondary);
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+}
+
+.chat-message.user {
+    background: var(--primary-color);
+    color: white;
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+}
+
+/* Панель ввода - фиксированная высота */
+.chat-input {
+    display: flex;
+    padding: var(--spacing-sm);
+    border-top: 1px solid var(--border);
+    gap: var(--spacing-xs);
+    height: 70px; /* Фиксированная высота */
+    flex-shrink: 0; /* Не сжимается */
+}
+
+.chat-input input {
+    flex: 1;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    outline: none;
+    height: 40px;
+}
+
+.chat-input input:focus {
+    border-color: var(--primary-color);
+}
+
+.chat-input button {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Кнопка открытия чата */
+.chat-toggle {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 60px;
+    height: 60px;
+    background: var(--primary-color);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+    z-index: 1000;
+    font-size: 1.5rem;
+    transition: all 0.3s ease;
+}
+
+.chat-toggle:hover {
+    transform: scale(1.1);
+    background: var(--primary-hover);
+}
+
+/* Дополнительные стили для чата */
+.message-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 4px;
+    font-size: 11px;
+    opacity: 0.7;
+}
+
+.message-time {
+    font-size: 11px;
+}
+
+.message-status {
+    font-size: 11px;
+    font-style: italic;
+}
+
+.message-status.message-success {
+    color: #28a745;
+}
+
+.message-status.message-error {
+    color: #dc3545;
+}
+
+/* Индикатор "печатает" */
+.typing-indicator {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 15px;
+    opacity: 0.7;
+}
+
+.typing-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--text-secondary);
+    border-radius: 50%;
+    animation: typingAnimation 1.4s infinite ease-in-out;
+}
+
+.typing-dot:nth-child(1) { animation-delay: -0.32s; }
+.typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes typingAnimation {
+    0%, 80%, 100% { transform: scale(0); }
+    40% { transform: scale(1); }
+}
+
+/* Гарантия работы скролла */
+@media (max-height: 600px) {
+    .chat-widget {
+        height: 400px;
+        max-height: 70vh;
+    }
+}

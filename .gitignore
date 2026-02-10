@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.pytest_cache/
+.mypy_cache/
+
+# Envs
+.env
+
+venv/
+.venv/
+
+# Local DB / artifacts
+*.db
+*.sqlite
+*.sqlite3
+
+# OS
+.DS_Store
+__MACOSX/
+
+# Uploads (should be external storage / volume in production)
+static/uploads/

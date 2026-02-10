@@ -1,0 +1,17 @@
+{
+  "name": "LuxuryDrive",
+  "short_name": "LuxuryDrive",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "description": "LuxuryDrive - премиальный каршеринг с водителем. Аренда роскошных автомобилей премиум-класса.",
+  "icons": [
+    {
+      "src": "/static/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon"
+    }
+  ]
+}

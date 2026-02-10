@@ -1,0 +1,166 @@
+{
+  "nav": {
+    "home": "Home",
+    "fleet": "Fleet",
+    "about": "About",
+    "contact": "Contact",
+    "book": "Book Now"
+  },
+  "hero": {
+    "badge": "Premium Service",
+    "title": {
+      "part1": "Premium",
+      "part2": "Chauffeur Service"
+    },
+    "subtitle": "Exceptional comfort and impeccable service for your most important journeys",
+    "cta": {
+      "book": "Book Now",
+      "explore": "Explore Fleet"
+    },
+    "stats": {
+      "rating": "Rating",
+      "support": "Support",
+      "cars": "Cars"
+    },
+    "scroll": "Explore Fleet"
+  },
+  "fleet": {
+    "title": "Our Fleet",
+    "subtitle": "Choose a car for your next journey",
+    "filters": {
+      "all": "All",
+      "business": "Business Class",
+      "premium": "Premium",
+      "suv": "SUVs",
+      "sport": "Sports Cars"
+    },
+    "price_per_hour": "/hour",
+    "price_per_day": "/day",
+    "features": {
+      "seats": "seats",
+      "bags": "bags",
+      "transmission": "automatic",
+      "engine": "engine",
+      "year": "year"
+    },
+    "cta": {
+      "book": "Book Now",
+      "details": "Details"
+    },
+    "status": {
+      "available": "Available",
+      "booked": "Booked",
+      "unavailable": "Unavailable"
+    },
+    "loading": "Loading cars...",
+    "no_cars": "No cars found",
+    "error": "Loading error",
+    "api_error": {
+      "message": "⚠️ Unable to load cars. Please check your internet connection and refresh the page.",
+      "reload": "Reload page"
+    }
+  },
+  "about": {
+    "title": "Why LuxuryDrive?",
+    "description": "We provide exclusive premium cars with professional drivers. Our service is the perfect combination of luxury, comfort and reliability.",
+    "stats": {
+      "experience": "years of experience",
+      "clients": "satisfied clients",
+      "cars": "cars in fleet",
+      "rating": "average rating"
+    },
+    "features": {
+      "fleet": {
+        "title": "Modern Fleet",
+        "description": "Only new premium-class cars with full option packages"
+      },
+      "drivers": {
+        "title": "Professional Drivers",
+        "description": "Experienced drivers with impeccable reputation and city knowledge"
+      },
+      "availability": {
+        "title": "24/7 Service",
+        "description": "Access to services at any time, 7 days a week"
+      },
+      "insurance": {
+        "title": "Full Insurance",
+        "description": "Comprehensive insurance for your peace of mind and safety"
+      }
+    },
+    "image_overlay": {
+      "luxury": "Luxury interiors",
+      "drivers": "Professional drivers",
+      "fleet": "Exclusive fleet"
+    }
+  },
+  "contact": {
+    "title": "Contact Us",
+    "subtitle": "Ready to travel? We will help you choose",
+    "form": {
+      "title": "Quick Application",
+      "name": "Your Name",
+      "phone": "Phone",
+      "message": "Message or questions",
+      "submit": "Submit Application"
+    },
+    "info": {
+      "phone": "Phone",
+      "email": "Email",
+      "hours": "Working Hours",
+      "address": "Address"
+    },
+    "note": {
+      "call": "Call to book 24/7",
+      "pickup": "(pickup can be arranged)"
+    },
+    "hours": {
+      "value": "24/7, seven days a week"
+    },
+    "address": {
+      "value": "Moscow, Premium St. 1"
+    },
+    "messengers": "Messengers"
+  },
+  "chat": {
+    "title": "Support",
+    "placeholder": "Type your message...",
+    "welcome": "Hello! How can I help you choose a car?",
+    "send": "Send",
+    "placeholder_response": "Thanks! Chat functionality will be connected later."
+  },
+  "common": {
+    "close": "Close",
+    "loading": "Loading...",
+    "success": "Success!",
+    "error": "Error",
+    "back_to_top": "Back to top"
+  },
+  "footer": {
+    "description": "Premium car rental with driver. Comfort and style in every trip.",
+    "sections": {
+      "fleet": "Fleet",
+      "services": "Services",
+      "company": "Company"
+    },
+    "services": {
+      "transfer": "Transfer",
+      "business": "Business Trips",
+      "wedding": "Wedding Cortege",
+      "excursions": "Excursions"
+    },
+    "company": {
+      "about": "About Us",
+      "contact": "Contacts",
+      "reviews": "Reviews",
+      "careers": "Careers"
+    },
+    "copyright": "© 2024 LuxuryDrive. All rights reserved.",
+    "legal": {
+      "privacy": "Privacy Policy",
+      "terms": "Terms of Service"
+    }
+  },
+  "meta": {
+    "title": "LuxuryDrive | Premium chauffeur car sharing"
+  }
+}

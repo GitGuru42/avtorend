@@ -1,0 +1,42 @@
+services:
+  - type: web
+    name: avtorend
+    env: python
+    region: frankfurt
+    plan: free
+    buildCommand: |
+      pip install -r requirements.txt
+      mkdir -p static/uploads/cars
+      mkdir -p static/uploads/temp
+    startCommand: ./start.sh
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+      - key: ENVIRONMENT
+        value: "production"
+      - key: DATABASE_URL
+        sync: false
+      # Comma-separated list. In production set your real domain(s), e.g.
+      # https://mydomain.com,https://www.mydomain.com
+      - key: ALLOWED_ORIGINS
+        value: "*"
+      # Optional
+      - key: WEB_CONCURRENCY
+        value: "2"
+    healthCheckPath: /health
+
+  # Optional: Telegram bot worker (enable if you deploy the bot).
+  - type: worker
+    name: avtorend-bot
+    env: python
+    region: frankfurt
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python api/telegram_bot.py
+    envVars:
+      - key: ENVIRONMENT
+        value: "production"
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
